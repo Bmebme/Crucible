@@ -24,11 +24,6 @@
 - `verification-state.svg` — 知识验证状态机
 - 其余为早期融合方案配图（architecture / knowledge-layers / hard-vs-soft / ingestion-pipeline / retrieval-pipeline）
 
-## 幻灯片与脚本
-
-- `slides/AI辅助漏洞验证-知识库作用与特点.pptx` — 3 页介绍（特点与作用 / 架构 / 与传统知识库对比）
-- `scripts/make_slide.py` — 幻灯片生成脚本，在仓库根目录执行 `python3 scripts/make_slide.py` 重新生成
-
 ## 核心设计原则
 
 1. **知识库只供知识，不替 Agent 推断** —— 路径组织、目标选择、POC 实例化、实测执行都是 Agent 的事；KB 只做枚举与召回
