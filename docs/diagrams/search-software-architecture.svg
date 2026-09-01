@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 780" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">软件架构：融合检索网关 + 双引擎 + LLM 提供层</title>
+  <desc id="d1">漏洞验证 Agent 经 MCP 出口调用融合检索网关；网关内含判别器、编排器、合并器、回写器四个组件，向下编排 llm_wiki 页面引擎与 LightRAG 实体图引擎；LLM 提供层为判别（Haiku）、合并（Sonnet/Opus）、抽取（LightRAG 摄入）提供模型。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--blue:#2a78d6;--orange:#eb6834;--aqua:#1baf7a;--violet:#4a3aa7;--green:#008300}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--blue:#3987e5;--orange:#d95926;--aqua:#199e70;--violet:#9085e9;--green:#008300}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-blue{stroke:var(--blue);fill:var(--blue);fill-opacity:.10}
+    .bx-orange{stroke:var(--orange);fill:var(--orange);fill-opacity:.10}
+    .bx-aqua{stroke:var(--aqua);fill:var(--aqua);fill-opacity:.10}
+    .bx-violet{stroke:var(--violet);fill:var(--violet);fill-opacity:.10}
+    .bx-green{stroke:var(--green);fill:var(--green);fill-opacity:.08}
+    .bx-gray{stroke:var(--baseline);fill:var(--hair);fill-opacity:.5}
+    .ln{fill:none;stroke-width:1.5}
+    .l-gray{stroke:var(--baseline)} .l-orange{stroke:var(--orange)} .l-aqua{stroke:var(--aqua)} .l-violet{stroke:var(--violet)} .l-green{stroke:var(--green)} .l-blue{stroke:var(--blue)}
+    .mk-gray{fill:var(--baseline)} .mk-orange{fill:var(--orange)} .mk-aqua{fill:var(--aqua)} .mk-violet{fill:var(--violet)} .mk-green{fill:var(--green)} .mk-blue{fill:var(--blue)}
+  </style>
+  <marker id="mag" class="mk-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mao" class="mk-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="maa" class="mk-aqua" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mav" class="mk-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mabl" class="mk-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="780" fill="var(--surf)"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">软件架构：融合检索网关 + 双引擎 + LLM 提供层</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">查询时融合 · 无融合索引 · 网关只编排不持有知识</text>
+
+  <!-- Agent -->
+  <rect x="40" y="80" width="920" height="56" rx="10" class="bx-blue"/>
+  <text x="60" y="103" font-size="14" font-weight="600" class="t1">漏洞验证 Agent（消费方）</text>
+  <text x="60" y="123" font-size="11.5" class="t2">三步流程：① 场景构建 → ② 路径规划 → ③ POC 生成与验证 · 验证结果回写</text>
+  <line x1="500" y1="136" x2="500" y2="158" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- MCP -->
+  <rect x="40" y="160" width="920" height="50" rx="10" class="bx-violet"/>
+  <text x="500" y="182" text-anchor="middle" font-size="12.5" font-weight="600" class="t1">MCP 出口：kb_search · kb_scenario · kb_goal · kb_poc · kb_record_verification</text>
+  <text x="500" y="200" text-anchor="middle" font-size="10.5" class="t2">工具面按 Agent 步骤切片，返回工件而非段落</text>
+  <line x1="500" y1="210" x2="500" y2="232" class="ln l-violet" marker-end="url(#mav)"/>
+
+  <!-- 融合检索网关 -->
+  <rect x="40" y="234" width="920" height="152" rx="10" class="bx-green"/>
+  <text x="60" y="260" font-size="14" font-weight="600" class="t1">融合检索网关（FastAPI · 127.0.0.1:19829）</text>
+  <rect x="60" y="274" width="210" height="90" rx="8" class="bx-green"/>
+  <text x="165" y="298" text-anchor="middle" font-size="13" font-weight="600" class="t1">判别器</text>
+  <text x="165" y="318" text-anchor="middle" font-size="10.5" class="t2">规则 + Haiku</text>
+  <text x="165" y="334" text-anchor="middle" font-size="10.5" class="t2">查询类型 → 倾向配置</text>
+  <text x="165" y="350" text-anchor="middle" font-size="10.5" class="t2">（Q1~Q4）</text>
+  <rect x="280" y="274" width="210" height="90" rx="8" class="bx-green"/>
+  <text x="385" y="298" text-anchor="middle" font-size="13" font-weight="600" class="t1">编排器</text>
+  <text x="385" y="318" text-anchor="middle" font-size="10.5" class="t2">双引擎并行召回</text>
+  <text x="385" y="334" text-anchor="middle" font-size="10.5" class="t2">按类型选召回通道</text>
+  <text x="385" y="350" text-anchor="middle" font-size="10.5" class="t2">降级路径管理</text>
+  <rect x="500" y="274" width="210" height="90" rx="8" class="bx-green"/>
+  <text x="605" y="298" text-anchor="middle" font-size="13" font-weight="600" class="t1">合并器</text>
+  <text x="605" y="318" text-anchor="middle" font-size="10.5" class="t2">M1~M4 四模式</text>
+  <text x="605" y="334" text-anchor="middle" font-size="10.5" class="t2">LLM 只比对不重写</text>
+  <text x="605" y="350" text-anchor="middle" font-size="10.5" class="t2">冲突对峙输出</text>
+  <rect x="720" y="274" width="210" height="90" rx="8" class="bx-green"/>
+  <text x="825" y="298" text-anchor="middle" font-size="13" font-weight="600" class="t1">回写器</text>
+  <text x="825" y="318" text-anchor="middle" font-size="10.5" class="t2">裁决结果回写</text>
+  <text x="825" y="334" text-anchor="middle" font-size="10.5" class="t2">差异 → wiki Lint 队列</text>
+  <text x="825" y="350" text-anchor="middle" font-size="10.5" class="t2">状态流转 + 加权</text>
+
+  <!-- 双引擎 -->
+  <rect x="40" y="420" width="440" height="170" rx="10" class="bx-orange"/>
+  <text x="60" y="446" font-size="13.5" font-weight="600" class="t1">llm_wiki 服务（页面引擎）</text>
+  <text x="460" y="446" text-anchor="end" font-size="10.5" class="t2">HTTP API :19828</text>
+  <rect x="60" y="462" width="123" height="102" rx="8" class="bx-orange"/>
+  <text x="121" y="490" text-anchor="middle" font-size="11.5" font-weight="600" class="t1">检索 API</text>
+  <text x="121" y="510" text-anchor="middle" font-size="10" class="t2">search / files</text>
+  <text x="121" y="526" text-anchor="middle" font-size="10" class="t2">混合检索</text>
+  <text x="121" y="542" text-anchor="middle" font-size="10" class="t2">关键词+向量+一跳图</text>
+  <rect x="198" y="462" width="123" height="102" rx="8" class="bx-orange"/>
+  <text x="259" y="490" text-anchor="middle" font-size="11.5" font-weight="600" class="t1">页面存储</text>
+  <text x="259" y="510" text-anchor="middle" font-size="10" class="t2">wiki/ 目录</text>
+  <text x="259" y="526" text-anchor="middle" font-size="10" class="t2">frontmatter 字段</text>
+  <text x="259" y="542" text-anchor="middle" font-size="10" class="t2">log.md · Lint 队列</text>
+  <rect x="336" y="462" width="123" height="102" rx="8" class="bx-orange"/>
+  <text x="397" y="490" text-anchor="middle" font-size="11.5" font-weight="600" class="t1">向量索引</text>
+  <text x="397" y="510" text-anchor="middle" font-size="10" class="t2">LanceDB</text>
+  <text x="397" y="526" text-anchor="middle" font-size="10" class="t2">页面向量</text>
+  <text x="397" y="542" text-anchor="middle" font-size="10" class="t2">可选嵌入端点</text>
+  <rect x="520" y="420" width="440" height="170" rx="10" class="bx-aqua"/>
+  <text x="540" y="446" font-size="13.5" font-weight="600" class="t1">LightRAG 服务（实体图引擎）</text>
+  <text x="940" y="446" text-anchor="end" font-size="10.5" class="t2">Server / 库</text>
+  <rect x="540" y="462" width="123" height="102" rx="8" class="bx-aqua"/>
+  <text x="601" y="490" text-anchor="middle" font-size="11.5" font-weight="600" class="t1">检索</text>
+  <text x="601" y="510" text-anchor="middle" font-size="10" class="t2">local / global</text>
+  <text x="601" y="526" text-anchor="middle" font-size="10" class="t2">/ mix / naive</text>
+  <text x="601" y="542" text-anchor="middle" font-size="10" class="t2">实体枚举 / 关系多跳</text>
+  <rect x="678" y="462" width="123" height="102" rx="8" class="bx-aqua"/>
+  <text x="739" y="490" text-anchor="middle" font-size="11.5" font-weight="600" class="t1">实体图存储</text>
+  <text x="739" y="510" text-anchor="middle" font-size="10" class="t2">Postgres / Neo4j</text>
+  <text x="739" y="526" text-anchor="middle" font-size="10" class="t2">实体 + 关系</text>
+  <text x="739" y="542" text-anchor="middle" font-size="10" class="t2">插入与更新</text>
+  <rect x="816" y="462" width="123" height="102" rx="8" class="bx-aqua"/>
+  <text x="877" y="490" text-anchor="middle" font-size="11.5" font-weight="600" class="t1">抽取管线</text>
+  <text x="877" y="510" text-anchor="middle" font-size="10" class="t2">LLM 实体/关系抽取</text>
+  <text x="877" y="526" text-anchor="middle" font-size="10" class="t2">定制 schema</text>
+  <text x="877" y="542" text-anchor="middle" font-size="10" class="t2">增量合并</text>
+
+  <!-- LLM 提供层 -->
+  <rect x="40" y="628" width="920" height="56" rx="10" class="bx-gray"/>
+  <text x="60" y="651" font-size="13.5" font-weight="600" class="t1">LLM 提供层</text>
+  <text x="500" y="663" text-anchor="middle" font-size="11.5" class="t2">Haiku（判别 · 低成本高并发） ｜ Sonnet / Opus（合并 · 严格循证） ｜ 抽取 LLM（LightRAG 摄入）</text>
+
+  <!-- 连线 -->
+  <line x1="270" y1="386" x2="270" y2="416" class="ln l-green" marker-end="url(#mag)"/>
+  <line x1="730" y1="386" x2="730" y2="416" class="ln l-green" marker-end="url(#mag)"/>
+  <line x1="165" y1="628" x2="165" y2="366" class="ln l-gray"/>
+  <line x1="605" y1="628" x2="605" y2="366" class="ln l-gray"/>
+  <line x1="877" y1="628" x2="877" y2="566" class="ln l-gray"/>
+  <text x="180" y="500" font-size="10.5" class="t2">模型服务</text>
+  <text x="620" y="500" font-size="10.5" class="t2">模型服务</text>
+  <text x="890" y="600" font-size="10.5" class="t2">模型服务</text>
+
+  <text x="500" y="742" text-anchor="middle" font-size="11" class="tm">网关不持有知识：两引擎各自存储与索引，网关只编排、合并与回写 · 全部仅绑定 127.0.0.1</text>
+</svg>

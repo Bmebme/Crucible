@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 780" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">检索策略流程：判别、类型分支、四模式合并</title>
+  <desc id="d1">查询经意图判别分为四类：枚举型走并集合并（全），机制型走一致性比对（准，冲突对峙输出并裁决回写），经验型走状态排序（可信，原样引用），链式型走路径合成（链完整，每跳带依据）。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--blue:#2a78d6;--orange:#eb6834;--aqua:#1baf7a;--violet:#4a3aa7;--green:#008300}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--blue:#3987e5;--orange:#d95926;--aqua:#199e70;--violet:#9085e9;--green:#008300}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-blue{stroke:var(--blue);fill:var(--blue);fill-opacity:.10}
+    .bx-orange{stroke:var(--orange);fill:var(--orange);fill-opacity:.10}
+    .bx-aqua{stroke:var(--aqua);fill:var(--aqua);fill-opacity:.10}
+    .bx-violet{stroke:var(--violet);fill:var(--violet);fill-opacity:.10}
+    .bx-green{stroke:var(--green);fill:var(--green);fill-opacity:.08}
+    .bx-gray{stroke:var(--baseline);fill:var(--hair);fill-opacity:.5}
+    .ln{fill:none;stroke-width:1.5}
+    .l-gray{stroke:var(--baseline)} .l-green{stroke:var(--green)}
+    .mk-gray{fill:var(--baseline)}
+  </style>
+  <marker id="mag" class="mk-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="780" fill="var(--surf)"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">检索策略流程：判别 → 类型分支 → 四模式合并</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">倾向性由查询类型决定：全 / 准 / 可信 / 链 · 所有输出带溯源，冲突与差异进入回写闭环</text>
+
+  <!-- query 与判别 -->
+  <rect x="400" y="76" width="200" height="46" rx="10" class="bx-gray"/>
+  <text x="500" y="103" text-anchor="middle" font-size="13" font-weight="600" class="t1">query</text>
+  <line x1="500" y1="122" x2="500" y2="146" class="ln l-gray" marker-end="url(#mag)"/>
+  <rect x="340" y="148" width="320" height="56" rx="10" class="bx-violet"/>
+  <text x="500" y="171" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">① 意图判别</text>
+  <text x="500" y="191" text-anchor="middle" font-size="10.5" class="t2">关键词规则 → 未命中 → Haiku 四分类</text>
+
+  <!-- 类型分支 -->
+  <rect x="40" y="240" width="210" height="50" rx="10" class="bx-blue"/>
+  <text x="145" y="261" text-anchor="middle" font-size="12.5" font-weight="600" class="t1">Q1 枚举型 · 全</text>
+  <text x="145" y="279" text-anchor="middle" font-size="10" class="t2">有哪些 / 清单 / 类型</text>
+  <rect x="280" y="240" width="210" height="50" rx="10" class="bx-aqua"/>
+  <text x="385" y="261" text-anchor="middle" font-size="12.5" font-weight="600" class="t1">Q2 机制型 · 准</text>
+  <text x="385" y="279" text-anchor="middle" font-size="10" class="t2">怎么 / 调用 / 版本 / 鉴权</text>
+  <rect x="520" y="240" width="210" height="50" rx="10" class="bx-orange"/>
+  <text x="625" y="261" text-anchor="middle" font-size="12.5" font-weight="600" class="t1">Q3 经验型 · 可信</text>
+  <text x="625" y="279" text-anchor="middle" font-size="10" class="t2">以前 / 历史 / 被拦 / 结果</text>
+  <rect x="760" y="240" width="210" height="50" rx="10" class="bx-violet"/>
+  <text x="865" y="261" text-anchor="middle" font-size="12.5" font-weight="600" class="t1">Q4 链式型 · 链</text>
+  <text x="865" y="279" text-anchor="middle" font-size="10" class="t2">路径 / 可达 / 还能做什么</text>
+  <line x1="440" y1="204" x2="145" y2="236" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="470" y1="204" x2="385" y2="236" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="530" y1="204" x2="625" y2="236" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="560" y1="204" x2="865" y2="236" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- Lane 1: Q1 -->
+  <text x="40" y="316" font-size="12" font-weight="600" class="t1">Q1 全（枚举）</text>
+  <rect x="40" y="328" width="180" height="52" rx="8" class="bx-blue"/>
+  <text x="130" y="350" text-anchor="middle" font-size="11" font-weight="600" class="t1">wiki 清单页检索</text>
+  <text x="130" y="368" text-anchor="middle" font-size="9.5" class="t2">组件 / 接口 / 类型清单</text>
+  <rect x="290" y="328" width="180" height="52" rx="8" class="bx-blue"/>
+  <text x="380" y="350" text-anchor="middle" font-size="11" font-weight="600" class="t1">RAG 实体枚举</text>
+  <text x="380" y="368" text-anchor="middle" font-size="9.5" class="t2">按实体类型全量拉出</text>
+  <rect x="540" y="328" width="160" height="52" rx="8" class="bx-green"/>
+  <text x="620" y="350" text-anchor="middle" font-size="11" font-weight="600" class="t1">M1 并集合并</text>
+  <text x="620" y="368" text-anchor="middle" font-size="9.5" class="t2">去重 + 差异标注</text>
+  <rect x="760" y="328" width="200" height="52" rx="8" class="bx-gray"/>
+  <text x="860" y="350" text-anchor="middle" font-size="11" font-weight="600" class="t1">并集 + 差异清单</text>
+  <text x="860" y="368" text-anchor="middle" font-size="9.5" class="t2">差异 → 回填建议（自愈）</text>
+  <line x1="220" y1="354" x2="286" y2="354" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="470" y1="354" x2="536" y2="354" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="700" y1="354" x2="756" y2="354" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="145" y1="290" x2="145" y2="324" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- Lane 2: Q2 -->
+  <text x="40" y="412" font-size="12" font-weight="600" class="t1">Q2 准（机制）</text>
+  <rect x="40" y="424" width="180" height="52" rx="8" class="bx-aqua"/>
+  <text x="130" y="446" text-anchor="middle" font-size="11" font-weight="600" class="t1">wiki 机制页</text>
+  <text x="130" y="464" text-anchor="middle" font-size="9.5" class="t2">坑位级叙述 + 来源</text>
+  <rect x="290" y="424" width="180" height="52" rx="8" class="bx-aqua"/>
+  <text x="380" y="446" text-anchor="middle" font-size="11" font-weight="600" class="t1">RAG 关系 + chunk</text>
+  <text x="380" y="464" text-anchor="middle" font-size="9.5" class="t2">injects / 调用关系</text>
+  <rect x="540" y="424" width="160" height="52" rx="8" class="bx-green"/>
+  <text x="620" y="446" text-anchor="middle" font-size="11" font-weight="600" class="t1">M2 一致性比对</text>
+  <text x="620" y="464" text-anchor="middle" font-size="9.5" class="t2">结论 + 证据比对</text>
+  <rect x="760" y="414" width="200" height="42" rx="8" class="bx-gray"/>
+  <text x="860" y="431" text-anchor="middle" font-size="10.5" font-weight="600" class="t1">一致 → 高置信输出</text>
+  <text x="860" y="447" text-anchor="middle" font-size="9" class="t2">结论 + 双证据</text>
+  <rect x="760" y="466" width="200" height="42" rx="8" class="bx-gray"/>
+  <text x="860" y="483" text-anchor="middle" font-size="10.5" font-weight="600" class="t1">冲突 → 对峙输出</text>
+  <text x="860" y="499" text-anchor="middle" font-size="9" class="t2">双方说法+证据 → 裁决回写</text>
+  <line x1="220" y1="450" x2="286" y2="450" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="470" y1="450" x2="536" y2="450" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="700" y1="436" x2="756" y2="436" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="700" y1="464" x2="756" y2="486" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="385" y1="290" x2="385" y2="420" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- Lane 3: Q3 -->
+  <text x="40" y="520" font-size="12" font-weight="600" class="t1">Q3 可信（经验）</text>
+  <rect x="40" y="532" width="180" height="52" rx="8" class="bx-orange"/>
+  <text x="130" y="554" text-anchor="middle" font-size="11" font-weight="600" class="t1">wiki 状态过滤</text>
+  <text x="130" y="572" text-anchor="middle" font-size="9.5" class="t2">verify_state 加权</text>
+  <rect x="290" y="532" width="180" height="52" rx="8" class="bx-green"/>
+  <text x="380" y="554" text-anchor="middle" font-size="11" font-weight="600" class="t1">M3 原样引用排序</text>
+  <text x="380" y="572" text-anchor="middle" font-size="9.5" class="t2">不合并内容 · 不改写</text>
+  <rect x="540" y="532" width="340" height="52" rx="8" class="bx-gray"/>
+  <text x="710" y="554" text-anchor="middle" font-size="11" font-weight="600" class="t1">输出：历史记录 + 状态标注</text>
+  <text x="710" y="572" text-anchor="middle" font-size="9.5" class="t2">success 置顶 · blocked 仅匹配环境时作负知识</text>
+  <line x1="220" y1="558" x2="286" y2="558" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="470" y1="558" x2="536" y2="558" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="625" y1="290" x2="625" y2="528" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- Lane 4: Q4 -->
+  <text x="40" y="628" font-size="12" font-weight="600" class="t1">Q4 链（路径）</text>
+  <rect x="40" y="640" width="180" height="52" rx="8" class="bx-violet"/>
+  <text x="130" y="662" text-anchor="middle" font-size="11" font-weight="600" class="t1">RAG global 多跳</text>
+  <text x="130" y="680" text-anchor="middle" font-size="9.5" class="t2">reaches / injects 链</text>
+  <rect x="290" y="640" width="180" height="52" rx="8" class="bx-violet"/>
+  <text x="380" y="662" text-anchor="middle" font-size="11" font-weight="600" class="t1">wiki 一跳扩展</text>
+  <text x="380" y="680" text-anchor="middle" font-size="9.5" class="t2">wikilink + 机制页依据</text>
+  <rect x="540" y="640" width="160" height="52" rx="8" class="bx-green"/>
+  <text x="620" y="662" text-anchor="middle" font-size="11" font-weight="600" class="t1">M4 路径合成</text>
+  <text x="620" y="680" text-anchor="middle" font-size="9.5" class="t2">候选链 + 每跳依据</text>
+  <rect x="760" y="640" width="200" height="52" rx="8" class="bx-gray"/>
+  <text x="860" y="662" text-anchor="middle" font-size="11" font-weight="600" class="t1">候选路径输出</text>
+  <text x="860" y="680" text-anchor="middle" font-size="9.5" class="t2">可行性由 Agent 实测判断</text>
+  <line x1="220" y1="666" x2="286" y2="666" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="470" y1="666" x2="536" y2="666" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="700" y1="666" x2="756" y2="666" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="865" y1="290" x2="865" y2="636" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <text x="500" y="752" text-anchor="middle" font-size="11" class="tm">LLM 只比对与呈现，不重写 · 冲突不裁决 · 所有输出带溯源 · 裁决与差异回写后知识自愈</text>
+</svg>

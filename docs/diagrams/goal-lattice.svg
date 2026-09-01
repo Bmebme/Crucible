@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">K4 威胁知识：目标层级与降级链（容器逃逸示例）</title>
+  <desc id="d1">目标「获取宿主机权限」经实测评估分叉：成功则解锁宿主机命令执行并通向横向移动与数据窃取；失败或被阻断则按降级链动态切换为容器内横向、敏感数据读取、持久化、资源滥用四个替代目标。检索以当前能力集为起点在目标-能力图上遍历 grants/requires/alternative_to 边。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--violet:#4a3aa7;--good:#0ca30c}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--violet:#9085e9;--good:#0ca30c}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-gray{stroke:var(--baseline);fill:var(--hair);fill-opacity:.5}
+    .bx-violet{stroke:var(--violet);fill:var(--violet);fill-opacity:.10}
+    .bx-good{stroke:var(--good);fill:var(--good);fill-opacity:.12}
+    .ln{fill:none;stroke-width:1.5}
+    .l-gray{stroke:var(--baseline)} .l-good{stroke:var(--good)}
+    .mk-gray{fill:var(--baseline)} .mk-good{fill:var(--good)}
+  </style>
+  <marker id="mag" class="mk-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mago" class="mk-good" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="560" fill="var(--surf)"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">K4 威胁知识：目标层级与降级链（容器逃逸示例）</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">目标-能力图：每个目标标注所需能力与解锁能力，失败时按降级链切换 —— Agent 据此动态调整目标</text>
+
+  <!-- 根目标 -->
+  <rect x="330" y="90" width="340" height="56" rx="10" class="bx-gray"/>
+  <text x="500" y="115" text-anchor="middle" font-size="14" font-weight="600" class="t1">目标：获取宿主机权限（容器逃逸）</text>
+  <text x="500" y="134" text-anchor="middle" font-size="11" class="t2">requires 容器内命令执行 · grants 宿主机命令执行</text>
+
+  <!-- 决策 -->
+  <rect x="330" y="196" width="340" height="52" rx="10" class="bx-gray"/>
+  <text x="500" y="222" text-anchor="middle" font-size="14" font-weight="600" class="t1">实测评估：逃逸是否可行？</text>
+  <text x="500" y="239" text-anchor="middle" font-size="11" class="t2">验证结果 → 成功 / 失败分支</text>
+  <line x1="500" y1="146" x2="500" y2="194" class="ln l-gray" marker-end="url(#mag)"/>
+  <text x="514" y="172" font-size="11" class="t2">验证</text>
+
+  <!-- 成功链 -->
+  <rect x="720" y="196" width="240" height="52" rx="10" class="bx-good"/>
+  <text x="840" y="222" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">解锁：宿主机命令执行</text>
+  <rect x="720" y="290" width="240" height="52" rx="10" class="bx-good"/>
+  <text x="840" y="316" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">进一步目标：横向移动 / 数据窃取</text>
+  <line x1="670" y1="222" x2="718" y2="222" class="ln l-good" marker-end="url(#mago)"/>
+  <text x="694" y="216" text-anchor="middle" font-size="11" class="t2">成功</text>
+  <line x1="840" y1="248" x2="840" y2="288" class="ln l-good" marker-end="url(#mago)"/>
+  <text x="854" y="272" font-size="11" class="t2">grants</text>
+
+  <!-- 降级链 -->
+  <line x1="500" y1="248" x2="500" y2="356" class="ln l-gray"/>
+  <line x1="140" y1="356" x2="890" y2="356" class="ln l-gray"/>
+  <line x1="140" y1="356" x2="140" y2="398" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="390" y1="356" x2="390" y2="398" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="640" y1="356" x2="640" y2="398" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="890" y1="356" x2="890" y2="398" class="ln l-gray" marker-end="url(#mag)"/>
+  <text x="60" y="336" font-size="11.5" class="t2">失败 / 被阻断 → 动态调整：按降级链切换目标</text>
+
+  <rect x="40" y="400" width="200" height="86" rx="10" class="bx-violet"/>
+  <text x="140" y="425" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">容器内横向</text>
+  <text x="140" y="445" text-anchor="middle" font-size="11" class="t2">访问其他容器 / 内网服务</text>
+  <text x="140" y="463" text-anchor="middle" font-size="11" class="t2">解锁：内网凭据 / 服务面</text>
+  <text x="140" y="481" text-anchor="middle" font-size="11" class="t2">前置：容器内执行能力</text>
+  <rect x="290" y="400" width="200" height="86" rx="10" class="bx-violet"/>
+  <text x="390" y="425" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">敏感数据读取</text>
+  <text x="390" y="445" text-anchor="middle" font-size="11" class="t2">挂载卷 / 环境变量 / SA token</text>
+  <text x="390" y="463" text-anchor="middle" font-size="11" class="t2">解锁：凭据 / 业务数据</text>
+  <text x="390" y="481" text-anchor="middle" font-size="11" class="t2">前置：容器内文件访问</text>
+  <rect x="540" y="400" width="200" height="86" rx="10" class="bx-violet"/>
+  <text x="640" y="425" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">持久化</text>
+  <text x="640" y="445" text-anchor="middle" font-size="11" class="t2">容器内后门</text>
+  <text x="640" y="463" text-anchor="middle" font-size="11" class="t2">解锁：长期驻留</text>
+  <text x="640" y="481" text-anchor="middle" font-size="11" class="t2">前置：可写文件系统</text>
+  <rect x="790" y="400" width="200" height="86" rx="10" class="bx-violet"/>
+  <text x="890" y="425" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">资源滥用 / DoS</text>
+  <text x="890" y="445" text-anchor="middle" font-size="11" class="t2">计算资源 / 网络带宽</text>
+  <text x="890" y="463" text-anchor="middle" font-size="11" class="t2">解锁：破坏 / 勒索</text>
+  <text x="890" y="481" text-anchor="middle" font-size="11" class="t2">前置：容器内执行能力</text>
+
+  <text x="500" y="530" text-anchor="middle" font-size="12" class="t2">检索实现：以「当前能力集」为起点，在目标-能力图上遍历 grants / requires / alternative_to 边 —— 图查询而非文本匹配</text>
+</svg>

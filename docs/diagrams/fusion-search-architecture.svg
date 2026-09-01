@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 660" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">融合检索架构：判别、双引擎并行召回、三模式合并</title>
+  <desc id="d1">查询经意图判别确定查询类型与倾向性配置，llm_wiki 页面引擎与 LightRAG 实体图引擎并行召回，结果进入三模式合并层（并集合并、一致性合并、状态排序、路径合成），最终输出带溯源与冲突差异标注的结果。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--border:rgba(11,11,11,.10);--orange:#eb6834;--aqua:#1baf7a;--violet:#4a3aa7;--green:#008300}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--border:rgba(255,255,255,.10);--orange:#d95926;--aqua:#199e70;--violet:#9085e9;--green:#008300}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-orange{stroke:var(--orange);fill:var(--orange);fill-opacity:.10}
+    .bx-aqua{stroke:var(--aqua);fill:var(--aqua);fill-opacity:.10}
+    .bx-violet{stroke:var(--violet);fill:var(--violet);fill-opacity:.10}
+    .bx-green{stroke:var(--green);fill:var(--green);fill-opacity:.08}
+    .bx-gray{stroke:var(--baseline);fill:var(--hair);fill-opacity:.5}
+    .ln{fill:none;stroke-width:1.5}
+    .l-gray{stroke:var(--baseline)} .l-orange{stroke:var(--orange)} .l-aqua{stroke:var(--aqua)} .l-violet{stroke:var(--violet)} .l-green{stroke:var(--green)}
+    .mk-gray{fill:var(--baseline)} .mk-orange{fill:var(--orange)} .mk-aqua{fill:var(--aqua)} .mk-violet{fill:var(--violet)} .mk-green{fill:var(--green)}
+  </style>
+  <marker id="mag" class="mk-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mao" class="mk-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="maa" class="mk-aqua" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mav" class="mk-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="660" fill="var(--surf)"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">融合检索架构：判别 → 双引擎并行召回 → 三模式合并</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">倾向性由查询类型决定（全 / 准 / 可信 / 链），合并由 LLM 比对与呈现，不重写</text>
+
+  <!-- 查询 -->
+  <rect x="350" y="84" width="300" height="54" rx="10" class="bx-gray"/>
+  <text x="500" y="108" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">query（自然语言 / 场景上下文）</text>
+  <text x="500" y="126" text-anchor="middle" font-size="11" class="t2">例：「有哪些文件处理组件？」「文件名如何进入命令？」</text>
+  <line x1="500" y1="138" x2="500" y2="174" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- 判别器 -->
+  <rect x="330" y="176" width="340" height="52" rx="10" class="bx-violet"/>
+  <text x="500" y="199" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">① 意图判别：查询类型 → 倾向性配置</text>
+  <text x="500" y="217" text-anchor="middle" font-size="11" class="t2">枚举型·全 / 机制型·准 / 经验型·可信 / 链式型·链（Haiku + 规则）</text>
+
+  <!-- 双引擎 -->
+  <rect x="60" y="268" width="420" height="130" rx="10" class="bx-orange"/>
+  <text x="80" y="294" font-size="15" font-weight="600" class="t1">llm_wiki · 页面引擎</text>
+  <text x="80" y="322" font-size="12" class="t2">· 混合检索：关键词 + 向量 + 一跳图</text>
+  <text x="80" y="346" font-size="12" class="t2">· 清单页 / 机制页 / 历史 POC / 验证记录</text>
+  <text x="80" y="370" font-size="12" class="t2">· 输出：页面内容 + 来源文档</text>
+  <rect x="520" y="268" width="420" height="130" rx="10" class="bx-aqua"/>
+  <text x="540" y="294" font-size="15" font-weight="600" class="t1">LightRAG · 实体图引擎</text>
+  <text x="540" y="322" font-size="12" class="t2">· local / global / mix 检索模式</text>
+  <text x="540" y="346" font-size="12" class="t2">· 实体枚举（按类型）/ 关系多跳</text>
+  <text x="540" y="370" font-size="12" class="t2">· 输出：实体 + 关系 + chunk</text>
+  <line x1="270" y1="228" x2="270" y2="264" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="730" y1="228" x2="730" y2="264" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- 合并层 -->
+  <rect x="60" y="448" width="880" height="76" rx="10" class="bx-green"/>
+  <text x="80" y="474" font-size="15" font-weight="600" class="t1">② 三模式合并（LLM 只比对与呈现，不重写、冲突不裁决）</text>
+  <text x="500" y="500" text-anchor="middle" font-size="12" class="t2">M1 并集合并（全） · M2 一致性合并（准） · M3 状态排序（可信） · M4 路径合成（链）</text>
+  <line x1="270" y1="398" x2="270" y2="444" class="ln l-orange" marker-end="url(#mao)"/>
+  <line x1="730" y1="398" x2="730" y2="444" class="ln l-aqua" marker-end="url(#maa)"/>
+
+  <!-- 输出 -->
+  <rect x="60" y="568" width="880" height="62" rx="10" class="bx-violet"/>
+  <text x="80" y="594" font-size="14" font-weight="600" class="t1">③ 输出：结果 + 溯源 + 冲突/差异标注</text>
+  <text x="80" y="615" font-size="11.5" class="t2">差异清单 → 回填建议（知识自愈） · 冲突并列双方说法与证据，由 Agent / 人裁决</text>
+  <line x1="500" y1="524" x2="500" y2="564" class="ln l-green" marker-end="url(#mag)"/>
+</svg>

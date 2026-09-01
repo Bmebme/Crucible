@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 760" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">漏洞验证 Agent 知识库架构：llm_wiki + RAG 双引擎</title>
+  <desc id="d1">知识来源分两条管道进入 llm_wiki 叙述层与 LightRAG 实体图层；通过 MCP 工具面为三步验证流程（攻击场景构建、攻击路径规划、POC 生成与实测验证）提供检索；验证结果经反馈闭环回写知识库。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--border:rgba(11,11,11,.10);--blue:#2a78d6;--orange:#eb6834;--aqua:#1baf7a;--violet:#4a3aa7;--green:#008300}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--border:rgba(255,255,255,.10);--blue:#3987e5;--orange:#d95926;--aqua:#199e70;--violet:#9085e9;--green:#008300}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-blue{stroke:var(--blue);fill:var(--blue);fill-opacity:.10}
+    .bx-orange{stroke:var(--orange);fill:var(--orange);fill-opacity:.10}
+    .bx-aqua{stroke:var(--aqua);fill:var(--aqua);fill-opacity:.10}
+    .bx-violet{stroke:var(--violet);fill:var(--violet);fill-opacity:.10}
+    .bx-green{stroke:var(--green);fill:var(--green);fill-opacity:.08}
+    .bx-gray{stroke:var(--baseline);fill:var(--hair);fill-opacity:.5}
+    .ln{fill:none;stroke-width:1.5}
+    .l-blue{stroke:var(--blue)} .l-orange{stroke:var(--orange)} .l-aqua{stroke:var(--aqua)} .l-violet{stroke:var(--violet)} .l-green{stroke:var(--green)}
+    .mk-blue{fill:var(--blue)} .mk-orange{fill:var(--orange)} .mk-aqua{fill:var(--aqua)} .mk-violet{fill:var(--violet)} .mk-green{fill:var(--green)}
+  </style>
+  <marker id="mab" class="mk-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mao" class="mk-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="maa" class="mk-aqua" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mav" class="mk-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mag" class="mk-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="760" fill="var(--surf)"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">漏洞验证 Agent 知识库架构：llm_wiki + RAG 双引擎</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">三步验证流程按需检索，验证结果回写知识库形成经验复利</text>
+
+  <!-- 知识来源 -->
+  <rect x="40" y="80" width="920" height="52" rx="10" class="bx-gray"/>
+  <text x="60" y="112" font-size="15" font-weight="600" class="t1">知识来源</text>
+  <text x="940" y="112" text-anchor="end" font-size="12.5" class="t2">产品文档 · API 规范 · 源代码 · 漏洞案例库 (WooYun) · 历史验证报告</text>
+
+  <!-- 引擎 A -->
+  <rect x="40" y="172" width="440" height="128" rx="10" class="bx-orange"/>
+  <text x="60" y="198" font-size="15" font-weight="600" class="t1">llm_wiki · 叙述层（场景库 + 威胁库 + 弹药库）</text>
+  <text x="60" y="226" font-size="12.5" class="t2">· scenario/ 场景模板 · pattern/ 漏洞模式</text>
+  <text x="60" y="250" font-size="12.5" class="t2">· surface/ 攻击面页 + 接口契约页</text>
+  <text x="60" y="274" font-size="12.5" class="t2">· threat/ 目标层级+降级链 · poc/ POC 剧本</text>
+  <text x="60" y="298" font-size="12.5" class="t2">· case/ 历史案例 · verification/ 验证日志</text>
+
+  <!-- 引擎 B -->
+  <rect x="520" y="172" width="440" height="128" rx="10" class="bx-aqua"/>
+  <text x="540" y="198" font-size="15" font-weight="600" class="t1">LightRAG · 实体图层（v1 可选 · 召回增强）</text>
+  <text x="540" y="226" font-size="12.5" class="t2">· 端点 / 服务 / 参数 / 目标 / 能力实体</text>
+  <text x="540" y="250" font-size="12.5" class="t2">· reaches / trusts / injects / grants 关系</text>
+  <text x="540" y="274" font-size="12.5" class="t2">· 多跳召回增强 · v1 不启用</text>
+  <text x="540" y="298" font-size="12.5" class="t2">· 增量插入 · 与 wiki 相互独立提取</text>
+
+  <line x1="250" y1="132" x2="250" y2="170" class="ln l-orange" marker-end="url(#mao)"/>
+  <text x="238" y="156" text-anchor="end" font-size="11" class="t2">文档/案例</text>
+  <line x1="750" y1="132" x2="750" y2="170" class="ln l-aqua" marker-end="url(#maa)"/>
+  <text x="738" y="156" text-anchor="end" font-size="11" class="t2">文档/案例</text>
+
+  <!-- MCP 出口 -->
+  <rect x="40" y="344" width="920" height="64" rx="10" class="bx-violet"/>
+  <text x="60" y="372" font-size="15" font-weight="600" class="t1">知识出口 MCP</text>
+  <text x="500" y="392" text-anchor="middle" font-size="13" class="t2">kb_scenario · kb_goal · kb_poc · kb_record_verification · kb_search</text>
+  <line x1="250" y1="300" x2="250" y2="342" class="ln l-orange" marker-end="url(#mao)"/>
+  <line x1="750" y1="300" x2="750" y2="342" class="ln l-aqua" marker-end="url(#maa)"/>
+
+  <!-- Agent 三步 -->
+  <rect x="40" y="452" width="270" height="116" rx="10" class="bx-blue"/>
+  <text x="175" y="478" text-anchor="middle" font-size="14" font-weight="600" class="t1">① 攻击场景构建</text>
+  <text x="175" y="502" text-anchor="middle" font-size="11.5" class="t2">输入：攻击面 + 漏洞模式</text>
+  <text x="175" y="522" text-anchor="middle" font-size="11.5" class="t2">检索：场景模板 + 历史案例</text>
+  <text x="175" y="542" text-anchor="middle" font-size="11.5" class="t2">输出：候选攻击场景</text>
+  <rect x="365" y="452" width="270" height="116" rx="10" class="bx-blue"/>
+  <text x="500" y="478" text-anchor="middle" font-size="14" font-weight="600" class="t1">② 攻击路径规划</text>
+  <text x="500" y="502" text-anchor="middle" font-size="11.5" class="t2">输入：场景 + 入口点</text>
+  <text x="500" y="522" text-anchor="middle" font-size="11.5" class="t2">检索：机制点召回 · Agent 组织路径</text>
+  <text x="500" y="542" text-anchor="middle" font-size="11.5" class="t2">输出：路径计划（每跳依据）</text>
+  <rect x="690" y="452" width="270" height="116" rx="10" class="bx-blue"/>
+  <text x="825" y="478" text-anchor="middle" font-size="14" font-weight="600" class="t1">③ POC 生成 + 实测验证</text>
+  <text x="825" y="502" text-anchor="middle" font-size="11.5" class="t2">输入：路径 + 接口契约</text>
+  <text x="825" y="522" text-anchor="middle" font-size="11.5" class="t2">检索：契约 + POC 剧本</text>
+  <text x="825" y="542" text-anchor="middle" font-size="11.5" class="t2">输出：POC + 验证结果</text>
+  <line x1="175" y1="408" x2="175" y2="450" class="ln l-violet" marker-end="url(#mav)"/>
+  <line x1="500" y1="408" x2="500" y2="450" class="ln l-violet" marker-end="url(#mav)"/>
+  <line x1="825" y1="408" x2="825" y2="450" class="ln l-violet" marker-end="url(#mav)"/>
+  <line x1="310" y1="510" x2="363" y2="510" class="ln l-blue" marker-end="url(#mab)"/>
+  <line x1="635" y1="510" x2="688" y2="510" class="ln l-blue" marker-end="url(#mab)"/>
+
+  <!-- 外层循环标注 -->
+  <rect x="30" y="448" width="940" height="124" rx="14" fill="none" stroke="var(--violet)" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="420" y="596" font-size="11.5" class="t2">外层循环：目标设定 → 执行三步 → 评估结果 → 动态调整目标（K4 降级链）</text>
+
+  <!-- 闭环 -->
+  <rect x="40" y="612" width="920" height="80" rx="10" class="bx-green"/>
+  <text x="60" y="640" font-size="15" font-weight="600" class="t1">验证反馈闭环</text>
+  <text x="500" y="664" text-anchor="middle" font-size="12.5" class="t2">成功 → 状态流转 verified_success 并加权 · 失败/拦截 → 负知识入库 · 新经验 → 页面更新 + 图边增补</text>
+  <text x="500" y="682" text-anchor="middle" font-size="11.5" class="tm">知识随验证次数复利增长 —— 这是本方案区别于传统问答的核心</text>
+  <line x1="825" y1="568" x2="825" y2="610" class="ln l-blue" marker-end="url(#mab)"/>
+  <line x1="24" y1="650" x2="24" y2="300" class="ln l-green" stroke-dasharray="5 4"/>
+  <line x1="24" y1="300" x2="44" y2="300" class="ln l-green" stroke-dasharray="5 4" marker-end="url(#mag)"/>
+  <text x="36" y="470" font-size="11" class="t2">验证结果回写</text>
+</svg>

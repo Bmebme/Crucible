@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 748" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">总体架构：双引擎生成与融合检索</title>
+  <desc id="d1">文档输入层分两条管道进入 HieraExtract 结构化引擎与 LLM Wiki 叙述引擎；两者写入融合层（对齐映射、融合图谱、实体页物化器）；融合层服务统一检索层，最终通过 HTTP API 与 MCP 对外输出。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--border:rgba(11,11,11,.10);--blue:#2a78d6;--orange:#eb6834;--aqua:#1baf7a;--violet:#4a3aa7;--green:#008300}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--border:rgba(255,255,255,.10);--blue:#3987e5;--orange:#d95926;--aqua:#199e70;--violet:#9085e9;--green:#008300}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-blue{stroke:var(--blue);fill:var(--blue);fill-opacity:.10}
+    .bx-orange{stroke:var(--orange);fill:var(--orange);fill-opacity:.10}
+    .bx-aqua{stroke:var(--aqua);fill:var(--aqua);fill-opacity:.10}
+    .bx-violet{stroke:var(--violet);fill:var(--violet);fill-opacity:.10}
+    .bx-green{stroke:var(--green);fill:var(--green);fill-opacity:.08}
+    .bx-gray{stroke:var(--baseline);fill:var(--hair);fill-opacity:.5}
+    .ln{fill:none;stroke-width:1.5}
+    .l-blue{stroke:var(--blue)} .l-orange{stroke:var(--orange)} .l-aqua{stroke:var(--aqua)} .l-violet{stroke:var(--violet)}
+    .mk-blue{fill:var(--blue)} .mk-orange{fill:var(--orange)} .mk-aqua{fill:var(--aqua)} .mk-violet{fill:var(--violet)}
+  </style>
+  <marker id="mab" class="mk-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mao" class="mk-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="maa" class="mk-aqua" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mav" class="mk-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="748" fill="var(--surf)"/>
+  <text x="500" y="38" text-anchor="middle" font-size="22" font-weight="600" class="t1">总体架构：双引擎生成 · 融合检索</text>
+  <text x="500" y="60" text-anchor="middle" font-size="13" class="t2">HieraExtract 生成结构实体，LLM Wiki 生成叙述页面，融合层对齐两者，统一检索层对外服务</text>
+
+  <!-- 文档输入层 -->
+  <rect x="40" y="80" width="920" height="52" rx="10" class="bx-gray"/>
+  <text x="60" y="112" font-size="15" font-weight="600" class="t1">文档输入层</text>
+  <text x="940" y="112" text-anchor="end" font-size="12.5" class="t2">产品/架构文档 · PDF · 图片 · 接口规范 · 网页剪藏</text>
+
+  <!-- 引擎 A -->
+  <rect x="40" y="176" width="440" height="138" rx="10" class="bx-blue"/>
+  <text x="60" y="202" font-size="15" font-weight="600" class="t1">管道 A · HieraExtract</text>
+  <text x="460" y="202" text-anchor="end" font-size="12.5" class="t2">结构化引擎 · 实体</text>
+  <text x="60" y="232" font-size="13" class="t2">· L0~L4 分层实体提取 → 确定性 ID（name 哈希）</text>
+  <text x="60" y="256" font-size="13" class="t2">· PostgreSQL JSONB + pgvector（512 维）</text>
+  <text x="60" y="280" font-size="13" class="t2">· graph trace / impact / deps 精确图遍历</text>
+  <text x="60" y="304" font-size="13" class="t2">· AttackSurfaceBuilder 攻击面导出</text>
+
+  <!-- 引擎 B -->
+  <rect x="520" y="176" width="440" height="138" rx="10" class="bx-orange"/>
+  <text x="540" y="202" font-size="15" font-weight="600" class="t1">管道 B · LLM Wiki</text>
+  <text x="940" y="202" text-anchor="end" font-size="12.5" class="t2">叙述引擎 · 页面</text>
+  <text x="540" y="232" font-size="13" class="t2">· 两步思维链 Ingest → wiki 页面（可追溯）</text>
+  <text x="540" y="256" font-size="13" class="t2">· [[wikilink]] 互链 + index / log 导航</text>
+  <text x="540" y="280" font-size="13" class="t2">· 混合检索：token + 向量 + 一跳图候选</text>
+  <text x="540" y="304" font-size="13" class="t2">· 原文溯源 + Lint 一致性维护</text>
+
+  <!-- 输入 → 引擎 -->
+  <line x1="250" y1="132" x2="250" y2="174" class="ln l-blue" marker-end="url(#mab)"/>
+  <text x="238" y="158" text-anchor="end" font-size="11.5" class="t2">文档</text>
+  <line x1="750" y1="132" x2="750" y2="174" class="ln l-orange" marker-end="url(#mao)"/>
+  <text x="738" y="158" text-anchor="end" font-size="11.5" class="t2">文档</text>
+
+  <!-- 融合层 -->
+  <rect x="40" y="360" width="920" height="124" rx="10" class="bx-aqua"/>
+  <text x="60" y="386" font-size="15" font-weight="600" class="t1">融合层 Fusion Layer</text>
+  <text x="940" y="386" text-anchor="end" font-size="12.5" class="t2">增量层 · 可由两库幂等重建</text>
+  <rect x="60" y="404" width="280" height="64" rx="8" class="bx-aqua"/>
+  <text x="200" y="430" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">对齐映射 kb_page_map</text>
+  <text x="200" y="450" text-anchor="middle" font-size="11" class="t2">实体 ↔ 页面 · 别名 · 置信度</text>
+  <rect x="360" y="404" width="280" height="64" rx="8" class="bx-aqua"/>
+  <text x="500" y="430" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">融合图谱 fusion_graph</text>
+  <text x="500" y="450" text-anchor="middle" font-size="11" class="t2">硬边 + 软边 + 跨库边统一排序</text>
+  <rect x="660" y="404" width="280" height="64" rx="8" class="bx-aqua"/>
+  <text x="800" y="430" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">实体页物化器 + 反向抽取</text>
+  <text x="800" y="450" text-anchor="middle" font-size="11" class="t2">KB ⇄ Wiki 双向生成</text>
+
+  <!-- 引擎 → 融合 -->
+  <line x1="250" y1="314" x2="250" y2="358" class="ln l-blue" marker-end="url(#mab)"/>
+  <text x="238" y="340" text-anchor="end" font-size="11" class="t2">事件A kb_updated</text>
+  <line x1="750" y1="314" x2="750" y2="358" class="ln l-orange" marker-end="url(#mao)"/>
+  <text x="738" y="340" text-anchor="end" font-size="11" class="t2">事件B wiki_updated</text>
+
+  <!-- 检索层 -->
+  <rect x="40" y="528" width="920" height="84" rx="10" class="bx-violet"/>
+  <text x="60" y="554" font-size="15" font-weight="600" class="t1">统一检索层 Unified Retrieval</text>
+  <text x="500" y="578" text-anchor="middle" font-size="13" class="t2">R1 Wiki混合 · R2 实体向量 · R3 图召回 · R4 原文 → RRF 融合 → LLM 重排 → 引用组装</text>
+  <text x="500" y="598" text-anchor="middle" font-size="11.5" class="tm">查询意图路由 · 通道权重自适应 · 结果全程溯源</text>
+  <line x1="500" y1="484" x2="500" y2="526" class="ln l-aqua" marker-end="url(#maa)"/>
+
+  <!-- 出口层 -->
+  <rect x="40" y="656" width="920" height="70" rx="10" class="bx-green"/>
+  <text x="60" y="682" font-size="15" font-weight="600" class="t1">出口层 Serving</text>
+  <text x="500" y="706" text-anchor="middle" font-size="12.5" class="t2">HTTP API :19829 · MCP Server · Claude Code · audit-report / unified-audit · Chat Agent</text>
+  <line x1="500" y1="612" x2="500" y2="654" class="ln l-violet" marker-end="url(#mav)"/>
+</svg>

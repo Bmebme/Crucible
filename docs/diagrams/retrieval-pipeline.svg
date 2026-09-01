@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 660" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">统一检索：四通道召回、融合排序与引用组装</title>
+  <desc id="d1">查询经意图路由决定四通道权重，R1 Wiki 混合召回、R2 实体向量召回、R3 图召回遍历、R4 原文召回并行执行，RRF 融合后 LLM 重排 top-30，最终组装分组结果并携带 kb_id、页面路径与源文档三元溯源。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--border:rgba(11,11,11,.10);--blue:#2a78d6;--orange:#eb6834;--aqua:#1baf7a;--violet:#4a3aa7;--green:#008300}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--border:rgba(255,255,255,.10);--blue:#3987e5;--orange:#d95926;--aqua:#199e70;--violet:#9085e9;--green:#008300}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-blue{stroke:var(--blue);fill:var(--blue);fill-opacity:.10}
+    .bx-orange{stroke:var(--orange);fill:var(--orange);fill-opacity:.10}
+    .bx-aqua{stroke:var(--aqua);fill:var(--aqua);fill-opacity:.10}
+    .bx-violet{stroke:var(--violet);fill:var(--violet);fill-opacity:.10}
+    .bx-green{stroke:var(--green);fill:var(--green);fill-opacity:.08}
+    .bx-gray{stroke:var(--baseline);fill:var(--hair);fill-opacity:.5}
+    .ln{fill:none;stroke-width:1.5}
+    .l-gray{stroke:var(--baseline)} .l-violet{stroke:var(--violet)}
+    .mk-gray{fill:var(--baseline)} .mk-violet{fill:var(--violet)}
+  </style>
+  <marker id="mag" class="mk-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mav" class="mk-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="660" fill="var(--surf)"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">统一检索：四通道召回 → 融合排序 → 引用组装</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">查询意图路由决定通道权重，所有结果携带 kb_id / page / source 三元溯源</text>
+
+  <!-- 查询 -->
+  <rect x="200" y="80" width="600" height="54" rx="8" class="bx-gray"/>
+  <text x="500" y="104" text-anchor="middle" font-size="14" font-weight="600" class="t1">query：订单服务的依赖链上有哪些数据存储？</text>
+  <text x="500" y="122" text-anchor="middle" font-size="11" class="t2">入口 POST /fusion/search</text>
+  <line x1="500" y1="134" x2="500" y2="156" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- 路由 -->
+  <rect x="360" y="158" width="280" height="46" rx="8" class="bx-violet"/>
+  <text x="500" y="181" text-anchor="middle" font-size="14" font-weight="600" class="t1">意图路由 · 判别器（Haiku）</text>
+  <text x="500" y="197" text-anchor="middle" font-size="11" class="t2">四类意图 → 通道权重 w₁~w₄</text>
+
+  <!-- 四通道 -->
+  <rect x="56" y="228" width="210" height="112" rx="8" class="bx-orange"/>
+  <text x="161" y="252" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">R1 · Wiki 混合召回</text>
+  <text x="161" y="277" text-anchor="middle" font-size="11" class="t2">token 关键词 + LanceDB 向量</text>
+  <text x="161" y="293" text-anchor="middle" font-size="11" class="t2">一跳图候选（llm_wiki）</text>
+  <text x="161" y="309" text-anchor="middle" font-size="11" class="t2">返回 token/vector/graph 命中</text>
+
+  <rect x="282" y="228" width="210" height="112" rx="8" class="bx-blue"/>
+  <text x="387" y="252" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">R2 · 实体向量召回</text>
+  <text x="387" y="277" text-anchor="middle" font-size="11" class="t2">pgvector 语义匹配（KB）</text>
+  <text x="387" y="293" text-anchor="middle" font-size="11" class="t2">可按 layer 过滤实体</text>
+  <text x="387" y="309" text-anchor="middle" font-size="11" class="t2">返回 id / name / score</text>
+
+  <rect x="508" y="228" width="210" height="112" rx="8" class="bx-aqua"/>
+  <text x="613" y="252" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">R3 · 图召回 / 遍历</text>
+  <text x="613" y="277" text-anchor="middle" font-size="11" class="t2">依赖链 · 影响面 · 邻域</text>
+  <text x="613" y="293" text-anchor="middle" font-size="11" class="t2">硬边遍历 + 软边扩展</text>
+  <text x="613" y="309" text-anchor="middle" font-size="11" class="t2">返回路径 + 关联页面</text>
+
+  <rect x="734" y="228" width="210" height="112" rx="8" class="bx-gray"/>
+  <text x="839" y="252" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">R4 · 原文召回</text>
+  <text x="839" y="277" text-anchor="middle" font-size="11" class="t2">只读原文模式</text>
+  <text x="839" y="293" text-anchor="middle" font-size="11" class="t2">逐句引用 raw sources</text>
+  <text x="839" y="309" text-anchor="middle" font-size="11" class="t2">返回源文件片段</text>
+
+  <line x1="500" y1="204" x2="163" y2="226" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="500" y1="204" x2="387" y2="226" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="500" y1="204" x2="613" y2="226" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="500" y1="204" x2="837" y2="226" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <text x="500" y="356" text-anchor="middle" font-size="11" class="t2">四通道并行召回（各自原生引擎）</text>
+
+  <!-- RRF -->
+  <rect x="360" y="372" width="280" height="52" rx="8" class="bx-violet"/>
+  <text x="500" y="396" text-anchor="middle" font-size="14" font-weight="600" class="t1">RRF 融合 · Σ w_c / (k + rank_c)</text>
+  <text x="500" y="412" text-anchor="middle" font-size="11" class="t2">k=60 · 通道明细随结果返回</text>
+  <line x1="161" y1="340" x2="410" y2="370" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="387" y1="340" x2="450" y2="370" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="613" y1="340" x2="550" y2="370" class="ln l-gray" marker-end="url(#mag)"/>
+  <line x1="839" y1="340" x2="590" y2="370" class="ln l-gray" marker-end="url(#mag)"/>
+
+  <!-- 重排 -->
+  <rect x="360" y="460" width="280" height="46" rx="8" class="bx-violet"/>
+  <text x="500" y="483" text-anchor="middle" font-size="14" font-weight="600" class="t1">LLM 重排 · 仅 top-30</text>
+  <text x="500" y="499" text-anchor="middle" font-size="11" class="t2">携带实体/页面摘要 + 溯源</text>
+  <line x1="500" y1="424" x2="500" y2="458" class="ln l-violet" marker-end="url(#mav)"/>
+
+  <!-- 输出 -->
+  <rect x="56" y="546" width="888" height="84" rx="8" class="bx-green"/>
+  <text x="76" y="572" font-size="14" font-weight="600" class="t1">结果组装：分组 + 引用 + 溯源</text>
+  <text x="500" y="598" text-anchor="middle" font-size="12.5" class="t2">① entity · svc-订单服务（r2+r3） ② page · 支付方案对比.md（r1） ③ source · api-spec.pdf#p12（r4）</text>
+  <text x="500" y="616" text-anchor="middle" font-size="11" class="t2">每个命中携带 kb_id / page_path / source_doc 三元组 · graph_context 供 Agent 继续遍历</text>
+  <line x1="500" y1="506" x2="500" y2="544" class="ln l-violet" marker-end="url(#mav)"/>
+</svg>

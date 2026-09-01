@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">知识验证状态机：实测由 Agent 执行，状态与加权由知识库维护</title>
+  <desc id="d1">未验证知识由 Agent 在真实环境实测，验证结果回写知识库后流转为已验证成功、被拦截不可达或误报三种状态；验证结果决定检索权重，被拦截状态在环境变更后可重验。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--good:#0ca30c;--warn:#fab219;--serious:#ec835a}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--good:#0ca30c;--warn:#fab219;--serious:#ec835a}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-gray{stroke:var(--baseline);fill:var(--hair);fill-opacity:.5}
+    .bx-good{stroke:var(--good);fill:var(--good);fill-opacity:.12}
+    .bx-warn{stroke:var(--warn);fill:var(--warn);fill-opacity:.12}
+    .bx-serious{stroke:var(--serious);fill:var(--serious);fill-opacity:.12}
+    .ln{fill:none;stroke-width:1.5}
+    .l-gray{stroke:var(--baseline)}
+    .mk-gray{fill:var(--baseline)}
+  </style>
+  <marker id="mag" class="mk-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="460" fill="var(--surf)"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">知识验证状态机：每条攻击知识都要接受实测审判</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">验证结果决定检索权重与知识形态 —— 未经验证的知识只是假设</text>
+
+  <!-- 未验证 -->
+  <rect x="370" y="90" width="260" height="56" rx="10" class="bx-gray"/>
+  <text x="500" y="114" text-anchor="middle" font-size="14.5" font-weight="600" class="t1">unverified · 未验证</text>
+  <text x="500" y="132" text-anchor="middle" font-size="11" class="t2">LLM 断言 / 文档推断</text>
+
+  <!-- 三状态 -->
+  <rect x="40" y="300" width="270" height="84" rx="10" class="bx-good"/>
+  <text x="175" y="326" text-anchor="middle" font-size="14" font-weight="600" class="t1">✓ verified_success · 已验证成功</text>
+  <text x="175" y="348" text-anchor="middle" font-size="11" class="t2">检索加权 boost · 沉淀为经验模板</text>
+  <text x="175" y="366" text-anchor="middle" font-size="11" class="t2">可被 POC 剧本直接引用</text>
+  <rect x="365" y="300" width="270" height="84" rx="10" class="bx-warn"/>
+  <text x="500" y="326" text-anchor="middle" font-size="14" font-weight="600" class="t1">⚠ verified_blocked · 被拦截/不可达</text>
+  <text x="500" y="348" text-anchor="middle" font-size="11" class="t2">负知识：拦截特征 (WAF/补丁/鉴权)</text>
+  <text x="500" y="366" text-anchor="middle" font-size="11" class="t2">记录环境差异 · 环境变更后可重验</text>
+  <rect x="690" y="300" width="270" height="84" rx="10" class="bx-serious"/>
+  <text x="825" y="326" text-anchor="middle" font-size="14" font-weight="600" class="t1">✗ false_positive · 误报</text>
+  <text x="825" y="348" text-anchor="middle" font-size="11" class="t2">修正漏洞模式前提 · 沉淀判别特征</text>
+  <text x="825" y="366" text-anchor="middle" font-size="11" class="t2">防止同类误报重复发生</text>
+
+  <!-- 转移 -->
+  <line x1="410" y1="146" x2="177" y2="298" class="ln l-gray" marker-end="url(#mag)"/>
+  <text x="265" y="232" font-size="11" class="t2">验证成功</text>
+  <line x1="500" y1="146" x2="500" y2="298" class="ln l-gray" marker-end="url(#mag)"/>
+  <text x="514" y="228" font-size="11" class="t2">被拦截 / 不可达</text>
+  <line x1="590" y1="146" x2="823" y2="298" class="ln l-gray" marker-end="url(#mag)"/>
+  <text x="725" y="232" font-size="11" class="t2">验证为误报</text>
+  <line x1="620" y1="300" x2="615" y2="148" class="ln l-gray" stroke-dasharray="5 4" marker-end="url(#mag)"/>
+  <text x="648" y="228" font-size="11" class="t2">环境变更后重验</text>
+
+  <text x="500" y="432" text-anchor="middle" font-size="12" class="t2">检索排序规则：verified_success &gt; unverified &gt; verified_blocked（blocked 仅在与当前环境匹配时作为负知识返回）</text>
+</svg>

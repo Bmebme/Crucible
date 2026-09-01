@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 580" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
+  <title id="t1">链接机制对比：声明式硬链接 vs 计算式软关联</title>
+  <desc id="d1">HieraExtract 的身份由名称哈希确定性生成，边是显式声明的记录，分类硬编码；LLM Wiki 的链接由正文解析派生，权重由四信号算法计算，聚类由 Louvain 算法发现。融合层同时容纳两类边。</desc>
+  <style>
+    .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--border:rgba(11,11,11,.10);--blue:#2a78d6;--orange:#eb6834;--aqua:#1baf7a;--yellow:#eda100}
+    @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--border:rgba(255,255,255,.10);--blue:#3987e5;--orange:#d95926;--aqua:#199e70;--yellow:#c98500}}
+    .t1{fill:var(--ink)} .t2{fill:var(--ink2)} .tm{fill:var(--muted)}
+    .bx-blue{stroke:var(--blue);fill:var(--blue);fill-opacity:.10}
+    .bx-orange{stroke:var(--orange);fill:var(--orange);fill-opacity:.10}
+    .bx-aqua{stroke:var(--aqua);fill:var(--aqua);fill-opacity:.10}
+    .blob-yellow{stroke:var(--yellow);fill:none;stroke-dasharray:5 4}
+    .ln{fill:none;stroke-width:1.5}
+    .l-blue{stroke:var(--blue)} .l-orange{stroke:var(--orange)}
+    .mk-blue{fill:var(--blue)} .mk-orange{fill:var(--orange)}
+  </style>
+  <marker id="mab" class="mk-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+  <marker id="mao" class="mk-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
+
+  <rect width="1000" height="580" fill="var(--surf)"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">链接机制对比：声明式硬链接 vs 计算式软关联</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">HieraExtract 的边在入库时钉死；LLM Wiki 的边由内容与算法动态派生</text>
+
+  <!-- 左：硬链接 -->
+  <rect x="40" y="78" width="440" height="362" rx="10" class="bx-blue"/>
+  <text x="260" y="106" text-anchor="middle" font-size="15.5" font-weight="600" class="t1">HieraExtract · 声明式硬链接</text>
+  <text x="260" y="126" text-anchor="middle" font-size="11.5" class="t2">确定性身份：name → sha256 → 唯一 ID（同名即同实体）</text>
+  <rect x="60" y="140" width="110" height="36" rx="8" class="bx-blue"/>
+  <text x="115" y="162" text-anchor="middle" font-size="13" class="t1">订单服务</text>
+  <rect x="215" y="140" width="90" height="36" rx="8" class="bx-blue"/>
+  <text x="260" y="162" text-anchor="middle" font-size="13" class="t1">sha256</text>
+  <rect x="350" y="140" width="120" height="36" rx="8" class="bx-blue"/>
+  <text x="410" y="162" text-anchor="middle" font-size="11.5" class="t1">svc-4f3a2b…</text>
+  <line x1="170" y1="158" x2="213" y2="158" class="ln l-blue" marker-end="url(#mab)"/>
+  <line x1="305" y1="158" x2="348" y2="158" class="ln l-blue" marker-end="url(#mab)"/>
+  <text x="260" y="204" text-anchor="middle" font-size="11.5" class="t2">边是显式声明的记录（入库即定，无需计算）</text>
+  <rect x="60" y="218" width="160" height="44" rx="8" class="bx-blue"/>
+  <text x="140" y="244" text-anchor="middle" font-size="13" class="t1">svc-订单服务</text>
+  <rect x="320" y="218" width="150" height="44" rx="8" class="bx-blue"/>
+  <text x="395" y="244" text-anchor="middle" font-size="13" class="t1">svc-结算服务</text>
+  <rect x="60" y="300" width="160" height="44" rx="8" class="bx-blue"/>
+  <text x="140" y="326" text-anchor="middle" font-size="13" class="t1">data-订单库</text>
+  <line x1="220" y1="240" x2="318" y2="240" class="ln l-blue" marker-end="url(#mab)"/>
+  <text x="269" y="234" text-anchor="middle" font-size="11" class="t2">depends_on</text>
+  <line x1="140" y1="262" x2="140" y2="298" class="ln l-blue" marker-end="url(#mab)"/>
+  <text x="154" y="284" font-size="11" class="t2">contract</text>
+  <text x="60" y="368" font-size="12.5" class="t2">· 身份：确定性 ID，幂等 upsert</text>
+  <text x="60" y="388" font-size="12.5" class="t2">· 边：entity_relations 显式元组</text>
+  <text x="60" y="408" font-size="12.5" class="t2">· 分类：L0~L4 硬编码分类法</text>
+  <text x="60" y="428" font-size="12.5" class="t2">· 查询：trace / impact 精确遍历</text>
+
+  <!-- 右：软关联 -->
+  <rect x="520" y="78" width="440" height="362" rx="10" class="bx-orange"/>
+  <text x="740" y="106" text-anchor="middle" font-size="15.5" font-weight="600" class="t1">LLM Wiki · 计算式软关联</text>
+  <text x="740" y="126" text-anchor="middle" font-size="11.5" class="t2">链接由正文解析派生（无独立边表，边随内容走）</text>
+  <rect x="540" y="140" width="110" height="36" rx="8" class="bx-orange"/>
+  <text x="595" y="162" text-anchor="middle" font-size="13" class="t1">页面正文</text>
+  <rect x="690" y="140" width="140" height="36" rx="8" class="bx-orange"/>
+  <text x="760" y="162" text-anchor="middle" font-size="13" class="t1">[[wikilink]]</text>
+  <rect x="870" y="140" width="80" height="36" rx="8" class="bx-orange"/>
+  <text x="910" y="162" text-anchor="middle" font-size="13" class="t1">图边</text>
+  <line x1="650" y1="158" x2="688" y2="158" class="ln l-orange" marker-end="url(#mao)"/>
+  <line x1="830" y1="158" x2="868" y2="158" class="ln l-orange" marker-end="url(#mao)"/>
+  <text x="740" y="204" text-anchor="middle" font-size="11.5" class="t2">权重由四信号算法动态计算</text>
+  <rect x="526" y="210" width="178" height="148" rx="18" class="blob-yellow"/>
+  <text x="615" y="226" text-anchor="middle" font-size="11" class="t2">Louvain 社区</text>
+  <rect x="545" y="240" width="140" height="44" rx="8" class="bx-orange"/>
+  <text x="615" y="266" text-anchor="middle" font-size="13" class="t1">订单服务.md</text>
+  <rect x="545" y="300" width="140" height="44" rx="8" class="bx-orange"/>
+  <text x="615" y="326" text-anchor="middle" font-size="13" class="t1">消息队列.md</text>
+  <rect x="835" y="240" width="115" height="44" rx="8" class="bx-orange"/>
+  <text x="892" y="266" text-anchor="middle" font-size="13" class="t1">支付方案.md</text>
+  <line x1="685" y1="262" x2="833" y2="262" class="ln l-orange" stroke-dasharray="5 4" marker-end="url(#mao)"/>
+  <text x="759" y="256" text-anchor="middle" font-size="11" class="t2">权重 0.42</text>
+  <line x1="615" y1="284" x2="615" y2="298" class="ln l-orange" stroke-dasharray="5 4" marker-end="url(#mao)"/>
+  <text x="630" y="296" font-size="11" class="t2">0.61</text>
+  <text x="540" y="368" font-size="12.5" class="t2">· 链接：边随内容走，页面即图</text>
+  <text x="540" y="388" font-size="12.5" class="t2">· 权重：四信号（链接/共源/AA/类型）</text>
+  <text x="540" y="408" font-size="12.5" class="t2">· 聚类：Louvain 社区算法发现</text>
+  <text x="540" y="428" font-size="12.5" class="t2">· 合并：LLM 语义合并 page_merge</text>
+
+  <!-- 结论 -->
+  <rect x="40" y="478" width="920" height="70" rx="10" class="bx-aqua"/>
+  <text x="500" y="506" text-anchor="middle" font-size="15" font-weight="600" class="t1">融合层的取舍：硬边保证精确性（影响面推导），软边补全语义召回（叙述上下文）</text>
+  <text x="500" y="528" text-anchor="middle" font-size="12" class="t2">fusion_graph 以 provenance 区分两类边，以 weight 统一排序</text>
+</svg>
