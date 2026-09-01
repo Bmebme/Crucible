@@ -27,7 +27,7 @@
   <line x1="500" y1="122" x2="500" y2="146" class="ln l-gray" marker-end="url(#mag)"/>
   <rect x="340" y="148" width="320" height="56" rx="10" class="bx-violet"/>
   <text x="500" y="171" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">① 意图判别</text>
-  <text x="500" y="191" text-anchor="middle" font-size="10.5" class="t2">关键词规则 → 未命中 → Haiku 四分类</text>
+  <text x="500" y="191" text-anchor="middle" font-size="10.5" class="t2">关键词规则 → 未命中 → DeepSeek 四分类</text>
 
   <!-- 类型分支 -->
   <rect x="40" y="240" width="210" height="50" rx="10" class="bx-blue"/>

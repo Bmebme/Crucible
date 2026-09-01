@@ -30,7 +30,7 @@
 
   <!-- 路由 -->
   <rect x="360" y="158" width="280" height="46" rx="8" class="bx-violet"/>
-  <text x="500" y="181" text-anchor="middle" font-size="14" font-weight="600" class="t1">意图路由 · 判别器（Haiku）</text>
+  <text x="500" y="181" text-anchor="middle" font-size="14" font-weight="600" class="t1">意图路由 · 判别器（DeepSeek）</text>
   <text x="500" y="197" text-anchor="middle" font-size="11" class="t2">四类意图 → 通道权重 w₁~w₄</text>
 
   <!-- 四通道 -->

@@ -32,7 +32,7 @@
   <!-- 判别器 -->
   <rect x="330" y="176" width="340" height="52" rx="10" class="bx-violet"/>
   <text x="500" y="199" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">① 意图判别：查询类型 → 倾向性配置</text>
-  <text x="500" y="217" text-anchor="middle" font-size="11" class="t2">枚举型·全 / 机制型·准 / 经验型·可信 / 链式型·链（Haiku + 规则）</text>
+  <text x="500" y="217" text-anchor="middle" font-size="11" class="t2">枚举型·全 / 机制型·准 / 经验型·可信 / 链式型·链（DeepSeek + 规则）</text>
 
   <!-- 双引擎 -->
   <rect x="60" y="268" width="420" height="130" rx="10" class="bx-orange"/>

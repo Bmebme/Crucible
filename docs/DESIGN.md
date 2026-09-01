@@ -355,7 +355,7 @@ RRF(d) = Σ_c w_c / (k + rank_c(d))      k = 60 (标准值)
 | 语义叙述 | 「为什么这样设计」「方案对比」 | w1↑ w4↑ | R1+R4 |
 | 混合综合 | 其余 | 均衡 | 四通道全开 |
 
-判别器：小模型（如 Haiku）分类 + 关键词规则（影响/依赖/上游/下游 → 图类型）。
+判别器：轻量模型（DeepSeek）分类 + 关键词规则（影响/依赖/上游/下游 → 图类型）。
 
 ### 6.4 统一检索 API 契约
 
@@ -499,7 +499,7 @@ POST /fusion/rebuild                # 重建融合层 (幂等)
 
 - 检索服务：Python 3.11+ / FastAPI / httpx
 - 存储：PostgreSQL 15+（pgvector）/ SQLite（单机退化模式）/ LanceDB（wiki 向量）
-- 对齐与重排 LLM：Haiku（判别/分类）+ Opus/Sonnet（重排与物化叙述）
+- 对齐与重排 LLM：DeepSeek（判别/分类）+ GLM 5.1（重排与物化叙述）
 - 事件：SQLite 事件表（本地轻量，无外部依赖）
 - 服务化：HTTP API + MCP（stdio），与 llm_wiki MCP 同构
 
