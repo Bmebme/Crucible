@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 780" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
-  <title id="t1">检索策略流程：判别、类型分支、四模式合并</title>
-  <desc id="d1">查询经意图判别分为四类：枚举型走并集合并（全），机制型走一致性比对（准，冲突对峙输出并裁决回写），经验型走状态排序（可信，原样引用），链式型走路径合成（链完整，每跳带依据）。</desc>
+  <title id="t1">检索策略流程：判别、类型分支、三模式合并</title>
+  <desc id="d1">查询经意图判别分为三类：枚举型走并集合并（全），机制型走一致性比对（准，冲突对峙输出并裁决回写），经验型走状态排序（可信，原样引用）。路径类问题由 Agent 基于机制点与历史问题自行组合，不属于知识库查询。</desc>
   <style>
     .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--blue:#2a78d6;--orange:#eb6834;--aqua:#1baf7a;--violet:#4a3aa7;--green:#008300}
     @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--blue:#3987e5;--orange:#d95926;--aqua:#199e70;--violet:#9085e9;--green:#008300}}
@@ -18,7 +18,7 @@
   <marker id="mag" class="mk-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z"/></marker>
 
   <rect width="1000" height="780" fill="var(--surf)"/>
-  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">检索策略流程：判别 → 类型分支 → 四模式合并</text>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="600" class="t1">检索策略流程：判别 → 类型分支 → 三模式合并</text>
   <text x="500" y="58" text-anchor="middle" font-size="13" class="t2">倾向性由查询类型决定：全 / 准 / 可信 / 链 · 所有输出带溯源，冲突与差异进入回写闭环</text>
 
   <!-- query 与判别 -->
@@ -27,7 +27,7 @@
   <line x1="500" y1="122" x2="500" y2="146" class="ln l-gray" marker-end="url(#mag)"/>
   <rect x="340" y="148" width="320" height="56" rx="10" class="bx-violet"/>
   <text x="500" y="171" text-anchor="middle" font-size="13.5" font-weight="600" class="t1">① 意图判别</text>
-  <text x="500" y="191" text-anchor="middle" font-size="10.5" class="t2">关键词规则 → 未命中 → DeepSeek 四分类</text>
+  <text x="500" y="191" text-anchor="middle" font-size="10.5" class="t2">关键词规则 → 未命中 → DeepSeek 三分类</text>
 
   <!-- 类型分支 -->
   <rect x="40" y="240" width="210" height="50" rx="10" class="bx-blue"/>
@@ -39,13 +39,9 @@
   <rect x="520" y="240" width="210" height="50" rx="10" class="bx-orange"/>
   <text x="625" y="261" text-anchor="middle" font-size="12.5" font-weight="600" class="t1">Q3 经验型 · 可信</text>
   <text x="625" y="279" text-anchor="middle" font-size="10" class="t2">以前 / 历史 / 被拦 / 结果</text>
-  <rect x="760" y="240" width="210" height="50" rx="10" class="bx-violet"/>
-  <text x="865" y="261" text-anchor="middle" font-size="12.5" font-weight="600" class="t1">Q4 链式型 · 链</text>
-  <text x="865" y="279" text-anchor="middle" font-size="10" class="t2">路径 / 可达 / 还能做什么</text>
   <line x1="440" y1="204" x2="145" y2="236" class="ln l-gray" marker-end="url(#mag)"/>
   <line x1="470" y1="204" x2="385" y2="236" class="ln l-gray" marker-end="url(#mag)"/>
   <line x1="530" y1="204" x2="625" y2="236" class="ln l-gray" marker-end="url(#mag)"/>
-  <line x1="560" y1="204" x2="865" y2="236" class="ln l-gray" marker-end="url(#mag)"/>
 
   <!-- Lane 1: Q1 -->
   <text x="40" y="316" font-size="12" font-weight="600" class="t1">Q1 全（枚举）</text>
@@ -104,24 +100,5 @@
   <line x1="470" y1="558" x2="536" y2="558" class="ln l-gray" marker-end="url(#mag)"/>
   <line x1="625" y1="290" x2="625" y2="528" class="ln l-gray" marker-end="url(#mag)"/>
 
-  <!-- Lane 4: Q4 -->
-  <text x="40" y="628" font-size="12" font-weight="600" class="t1">Q4 链（路径）</text>
-  <rect x="40" y="640" width="180" height="52" rx="8" class="bx-violet"/>
-  <text x="130" y="662" text-anchor="middle" font-size="11" font-weight="600" class="t1">RAG global 多跳</text>
-  <text x="130" y="680" text-anchor="middle" font-size="9.5" class="t2">reaches / injects 链</text>
-  <rect x="290" y="640" width="180" height="52" rx="8" class="bx-violet"/>
-  <text x="380" y="662" text-anchor="middle" font-size="11" font-weight="600" class="t1">wiki 一跳扩展</text>
-  <text x="380" y="680" text-anchor="middle" font-size="9.5" class="t2">wikilink + 机制页依据</text>
-  <rect x="540" y="640" width="160" height="52" rx="8" class="bx-green"/>
-  <text x="620" y="662" text-anchor="middle" font-size="11" font-weight="600" class="t1">M4 路径合成</text>
-  <text x="620" y="680" text-anchor="middle" font-size="9.5" class="t2">候选链 + 每跳依据</text>
-  <rect x="760" y="640" width="200" height="52" rx="8" class="bx-gray"/>
-  <text x="860" y="662" text-anchor="middle" font-size="11" font-weight="600" class="t1">候选路径输出</text>
-  <text x="860" y="680" text-anchor="middle" font-size="9.5" class="t2">可行性由 Agent 实测判断</text>
-  <line x1="220" y1="666" x2="286" y2="666" class="ln l-gray" marker-end="url(#mag)"/>
-  <line x1="470" y1="666" x2="536" y2="666" class="ln l-gray" marker-end="url(#mag)"/>
-  <line x1="700" y1="666" x2="756" y2="666" class="ln l-gray" marker-end="url(#mag)"/>
-  <line x1="865" y1="290" x2="865" y2="636" class="ln l-gray" marker-end="url(#mag)"/>
-
-  <text x="500" y="752" text-anchor="middle" font-size="11" class="tm">LLM 只比对与呈现，不重写 · 冲突不裁决 · 所有输出带溯源 · 裁决与差异回写后知识自愈</text>
+  <text x="500" y="652" text-anchor="middle" font-size="11" class="tm">路径类问题由 Agent 基于机制点与历史问题自行组合，不属于知识库查询 · LLM 只比对与呈现，不重写 · 冲突不裁决 · 输出带溯源</text>
 </svg>

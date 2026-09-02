@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 660" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" class="viz-root" role="img" aria-labelledby="t1 d1">
   <title id="t1">融合检索架构：判别、双引擎并行召回、三模式合并</title>
-  <desc id="d1">查询经意图判别确定查询类型与倾向性配置，llm_wiki 页面引擎与 LightRAG 实体图引擎并行召回，结果进入三模式合并层（并集合并、一致性合并、状态排序、路径合成），最终输出带溯源与冲突差异标注的结果。</desc>
+  <desc id="d1">查询经意图判别确定查询类型与倾向性配置，llm_wiki 页面引擎与 LightRAG 实体图引擎并行召回，结果进入三模式合并层（并集合并、一致性合并、状态排序），最终输出带溯源与冲突差异标注的结果；路径组合由 Agent 完成。</desc>
   <style>
     .viz-root{color-scheme:light;--surf:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:#e1e0d9;--baseline:#c3c2b7;--border:rgba(11,11,11,.10);--orange:#eb6834;--aqua:#1baf7a;--violet:#4a3aa7;--green:#008300}
     @media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--surf:#1a1a19;--ink:#ffffff;--ink2:#c3c2b7;--muted:#898781;--hair:#2c2c2a;--baseline:#383835;--border:rgba(255,255,255,.10);--orange:#d95926;--aqua:#199e70;--violet:#9085e9;--green:#008300}}
@@ -51,7 +51,7 @@
   <!-- 合并层 -->
   <rect x="60" y="448" width="880" height="76" rx="10" class="bx-green"/>
   <text x="80" y="474" font-size="15" font-weight="600" class="t1">② 三模式合并（LLM 只比对与呈现，不重写、冲突不裁决）</text>
-  <text x="500" y="500" text-anchor="middle" font-size="12" class="t2">M1 并集合并（全） · M2 一致性合并（准） · M3 状态排序（可信） · M4 路径合成（链）</text>
+  <text x="500" y="500" text-anchor="middle" font-size="12" class="t2">M1 并集合并（全） · M2 一致性合并（准） · M3 状态排序（可信） —— 路径组合归 Agent</text>
   <line x1="270" y1="398" x2="270" y2="444" class="ln l-orange" marker-end="url(#mao)"/>
   <line x1="730" y1="398" x2="730" y2="444" class="ln l-aqua" marker-end="url(#maa)"/>
 
