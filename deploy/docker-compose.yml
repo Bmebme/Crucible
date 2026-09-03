@@ -32,7 +32,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - hf-cache:/root/.cache/huggingface
+      # 宿主机模型缓存直接绑入 (避免容器内重下 bge 模型/tiktoken, 网络受限环境)
+      - ${HF_CACHE_HOST:-~/.cache/huggingface}:/root/.cache/huggingface
+      - ${TIKTOKEN_CACHE_HOST:-~/.cache/tiktoken}:/root/.cache/tiktoken
       - ${DATA_ROOT:-./data}:/data
     depends_on:
       postgres:
@@ -40,4 +42,3 @@ services:
 
 volumes:
   pg-data:
-  hf-cache:
