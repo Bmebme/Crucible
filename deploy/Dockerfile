@@ -6,9 +6,10 @@ ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
 WORKDIR /srv
 
-# 系统依赖: lightrag 需要 build 工具链 (Cython/numpy), libgomp 供 torch
+# 系统依赖: 仅 libgomp (torch 运行时); 全部 Python 依赖走 wheel, 无需编译工具链
+# (build-essential 会撑爆 Docker Desktop 内存限额, 已实测踩坑)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential libgomp1 curl \
+        libgomp1 curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 拷代码 + 安装 (editable 安装需要 src 在场; rag 装失败则降级为基础包)
