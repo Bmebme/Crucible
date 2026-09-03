@@ -51,6 +51,8 @@ def main() -> None:
     args = parser.parse_args()
 
     config = Config()
+    if getattr(args, "alias_mode", None):
+        config.alias_mode = args.alias_mode
     project_id = getattr(args, "project_id", "current")
     project_path = getattr(args, "project_path", "")
     orch = FusionOrchestrator(config, project_id=project_id, project_path=project_path)
@@ -61,24 +63,8 @@ def main() -> None:
                 args.text, env=getattr(args, "env", ""), history=args.history
             )
         elif args.cmd == "enum":
-            # 枚举查询: 走 Q1 通道
-            from .classifier import classify
-            from .schemas import FusionResponse, QueryType
-            from .merge.m1_union import union_merge
-
-            import asyncio as _aio
-
-            pages, entities = await _aio.gather(
-                orch.wiki.list_pages(project_id),
-                orch.rag.enumerate_entities(project_path, args.hint),
-            )
-            merged = union_merge(pages, [e.name for e in entities])
-            resp = FusionResponse(query=f"enum:{args.hint}", routing=await classify(f"有哪些{args.hint}", config))
-            resp.results = [{"kind": "item", "name": n, "provenance": ["union"]} for n in merged.union]
-            resp.differences = merged.differences
-            resp.notes.append(
-                f"union={len(merged.union)} differences={len(merged.differences)}"
-            )
+            # 枚举查询: 走 orchestrator 的 Q1 通道 (含 L2/L3 名字对齐)
+            resp = await orch.run_enum(args.hint)
         else:
             resp = await orch.run(args.text, env=args.env, history=args.history)
         _print_response(resp)
@@ -89,6 +75,12 @@ def main() -> None:
 def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--project-id", default="current")
     p.add_argument("--project-path", default="")
+    p.add_argument(
+        "--alias-mode",
+        default=None,
+        choices=["l2+l3", "l3", "off"],
+        help="名字对齐模式 (默认取 CRUCIBLE_ALIAS_MODE, 再默认 l2+l3)",
+    )
 
 
 if __name__ == "__main__":

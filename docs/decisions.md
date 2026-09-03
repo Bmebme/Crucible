@@ -160,16 +160,31 @@ LANGUAGE="English"），与中文 wiki 页面名无法比对（实测 union=15 �
 - **L1（必做，已实现）**：LightRAG 提取中文实体
   `addon_params={"language": "Simplified Chinese"}`（实测生效：实体名与类型词表
   均为中文）
-- **L2（计划中）**：`kb-aliases.yaml` 别名词典——复合名拆分（`er-ir-接口分类`
-  ↔ `er接口`+`ir接口`）、等价名对（`hiro-路由总线` ↔ `Hiro总线`）、同义词。
-  M1 归一化前先查词典。词条来源：M1 差异清单手工收敛
-- **L3（推迟）**：LLM 实体消解，confidence < 0.7 进人工队列
+- **L2（已实现）**：`kb-aliases.yaml` 别名词典——复合名拆分（`er-ir-接口分类`
+  ↔ `er接口`+`ir接口`）、等价名组（`hiro-路由总线` ↔ `Hiro总线`）。词条来源：
+  M1 差异清单手工收敛，**只收录确认过的等价关系**
+- **L3（已实现）**：LLM 实体消解——L2 未命中的候选对（表面相似性剪枝后）
+  一次批量调用判定等价，confidence ≥ 0.7 才采纳；判定结果经人工确认后
+  **回写 L2 词典**（闭环）
+
+**开关**：`alias_mode`（env `CRUCIBLE_ALIAS_MODE` / CLI `--alias-mode`）：
+- `l2+l3`（默认）词典先行，未命中走 LLM
+- `l3` 跳过词典，全部走 LLM 消解
+- `off` 关闭对齐，纯归一化比对（基线）
+
+实测（mae, enum 组件）：off union=189/diff=184 → l3 union=185/diff=175 →
+l2+l3 union=186/diff=178。
 
 **实现**：L1 在 `src/crucible/rag_engine.py` `addon_params` +
-`config.py` `rag_language`（env `CRUCIBLE_RAG_LANGUAGE`）。
+`config.py` `rag_language`；L2/L3 在 `src/crucible/merge/aliases.py`
+（`load_alias_dict`/`candidate_pairs`/`resolve_llm_pairs`），`union_merge`
+比对前调用（`aliases`/`llm_same` 参数），orchestrator `_run_enum` 编排
+（两遍合并：第一遍拿剩余差异 → 候选剪枝 → LLM 判定 → 第二遍正式合并）；
+词典文件在项目根 `kb-aliases.yaml`（`config.aliases_file`）。
 
-**调整**：L2 落地位置——新模块 `src/crucible/merge/aliases.py`（读
-`kb-aliases.yaml`），`union_merge` 比对前调用；词典文件放项目根。
+**调整**：候选剪枝启发式 → `candidate_pairs` 的 `sim_score`/`_TOKEN_MIN_LEN`；
+LLM 判定 prompt/置信阈值 → `_L3_PROMPT`/`_L3_CONFIDENCE_MIN`；
+批量上限 → `_L3_BATCH_MAX`。
 
 ---
 

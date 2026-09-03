@@ -17,6 +17,33 @@ from typing import Any
 # HuggingFace 直连不稳定 —— 走国内镜像 (与 llm_wiki 调试约定一致)
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
+
+def _model_is_cached(model_id: str) -> bool:
+    """模型是否已在本地 HF 缓存 (目录级探测, 避免镜像抖动时加载阻塞)。"""
+    try:
+        from pathlib import Path
+
+        cache_root = Path(
+            os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")
+        ) / "hub"
+        return any(cache_root.glob(f"models--{model_id.replace('/', '--')}*"))
+    except Exception:
+        return False
+
+
+def _prefer_offline_hub() -> None:
+    """模型已缓存时强制 hub 离线。
+
+    HF_HUB_OFFLINE 是 huggingface_hub 的导入期常量 —— env 在 hub 已被
+    导入 (lightrag/transformers 链条) 之后设置不生效, 必须直接改常量。
+    """
+    try:
+        import huggingface_hub.constants as _hc
+
+        _hc.HF_HUB_OFFLINE = True
+    except Exception:
+        pass
+
 from ..config import Config
 from ..schemas import RagEntity
 
@@ -86,6 +113,11 @@ class RagEngine:
                     base_url=cfg.llm_base,
                     **kwargs,
                 )
+
+            # 模型已缓存: 关闭 hub 在线探测 (hf-mirror 抖动时 HEAD 重试会阻塞分钟级)
+            if _model_is_cached(cfg.embed_model):
+                os.environ.setdefault("HF_HUB_OFFLINE", "1")
+                _prefer_offline_hub()
 
             from sentence_transformers import SentenceTransformer
 

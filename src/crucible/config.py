@@ -58,6 +58,17 @@ class Config:
             "表格表头、以及 ENTITY_START 之类的模板占位符。",
         )
     )
+    # 名字对齐模式 (§5.5 L2/L3, decisions.md D-08):
+    #   l2+l3  词典先行, 未命中走 LLM 消解 (默认)
+    #   l3     跳过词典, 全部走 LLM 消解
+    #   off    关闭对齐, 纯字符串归一化比对 (基线)
+    alias_mode: str = field(
+        default_factory=lambda: os.environ.get("CRUCIBLE_ALIAS_MODE", "l2+l3")
+    )
+    # L2 别名词典文件名 (相对项目根)
+    aliases_file: str = field(
+        default_factory=lambda: os.environ.get("CRUCIBLE_ALIASES_FILE", "kb-aliases.yaml")
+    )
 
     def rag_workdir_for(self, project_path: str) -> str:
         return self.rag_workdir or str(Path(project_path) / ".lightrag")

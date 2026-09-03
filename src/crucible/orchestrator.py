@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 from .classifier import classify, merge_mode, rewrite_if_needed
@@ -13,7 +14,8 @@ from .config import Config
 from .engines.rag_engine import RagEngine
 from .engines.wiki_engine import WikiEngine
 from .merge import m2_consistency
-from .merge.m1_union import union_merge
+from .merge.aliases import candidate_pairs, load_alias_dict, resolve_llm_pairs
+from .merge.m1_union import normalize_name, union_merge
 from .merge.m3_state import sort_by_verify_state
 from .schemas import FusionResponse, QueryType, WikiHit
 
@@ -67,13 +69,54 @@ class FusionOrchestrator:
 
     # ---- 三类执行路径 -------------------------------------------------
 
+    async def run_enum(self, hint: str) -> FusionResponse:
+        """Q1 枚举入口 (CLI/MCP 共用): 判别 → M1 并集合并 (含 L2/L3)。"""
+        routing = await classify(f"有哪些{hint}", self.config)
+        resp = FusionResponse(query=f"enum:{hint}", routing=routing)
+        resp.notes.append(f"merge_mode={merge_mode(routing.query_type)}")
+        await self._run_enum(hint, resp)
+        return resp
+
     async def _run_enum(self, query: str, resp: FusionResponse) -> None:
-        """Q1: 双引擎枚举 → M1 并集合并。"""
+        """Q1: 双引擎枚举 → M1 并集合并 (含 L2/L3 名字对齐, §5.5)。"""
         wiki_pages, rag_entities = await asyncio.gather(
             self.wiki.list_pages(self.project_id),
             self.rag.enumerate_entities(self.project_path, query),
         )
-        merged = union_merge(wiki_pages, [e.name for e in rag_entities])
+        rag_names = [e.name for e in rag_entities]
+        mode = self.config.alias_mode
+
+        # L2 词典: 仅 l2+l3 模式加载 (l3 跳过词典, off 全关)
+        alias_dict = None
+        if mode == "l2+l3" and self.project_path:
+            alias_dict = load_alias_dict(
+                Path(self.project_path) / self.config.aliases_file
+            )
+
+        # L3 LLM 消解: 第一遍合并后, 对剩余差异做候选剪枝 + 批量判定
+        llm_same: set[tuple[str, str]] = set()
+        if mode in ("l2+l3", "l3"):
+            first = union_merge(wiki_pages, rag_names, aliases=alias_dict)
+            wiki_left = {
+                normalize_name(d.item)
+                for d in first.differences
+                if d.only_in == "wiki"
+            }
+            rag_left = {
+                normalize_name(d.item)
+                for d in first.differences
+                if d.only_in == "rag"
+            }
+            pairs = candidate_pairs(wiki_left, rag_left)
+            llm_same = await resolve_llm_pairs(pairs, self.config)
+            if pairs:
+                resp.notes.append(
+                    f"l3_candidates={len(pairs)} l3_matched={len(llm_same)}"
+                )
+
+        merged = union_merge(
+            wiki_pages, rag_names, aliases=alias_dict, llm_same=llm_same or None
+        )
         resp.results = [
             {"kind": "item", "name": name, "provenance": ["union"]}
             for name in merged.union
@@ -81,8 +124,11 @@ class FusionOrchestrator:
         resp.differences = merged.differences
         resp.notes.append(
             f"union={len(merged.union)} wiki={len(merged.wiki_items)} "
-            f"rag={len(merged.rag_items)} differences={len(merged.differences)}"
+            f"rag={len(merged.rag_items)} differences={len(merged.differences)} "
+            f"alias_mode={mode}"
         )
+        for note in merged.alias_notes:
+            resp.notes.append(f"alias: {note}")
 
     async def _run_experience(self, query: str, resp: FusionResponse, env: str) -> None:
         """Q3: wiki verify_state 加权 → M3 状态排序 (原样引用)。"""
