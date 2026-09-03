@@ -1,0 +1,43 @@
+# Crucible 工程化栈 (docs/engineering-plan.md)
+# 今晚最小可用: postgres + crucible; llm-wiki 本地 19828 (host.docker.internal)
+# P1c 后续: lightrag 服务容器 + mineru (镜像/模型下载待网络窗口)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: crucible
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-crucible}
+      POSTGRES_DB: crucible
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crucible"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  crucible:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file: .env
+    environment:
+      # docker 内访问宿主机: llm-wiki daemon (本地 19828) 与 PG
+      CRUCIBLE_WIKI_BASE: http://host.docker.internal:19828
+      CRUCIBLE_DATABASE_URL: postgresql+asyncpg://crucible:${PG_PASSWORD:-crucible}@postgres:5432/crucible
+      # 项目数据目录 (宿主机路径挂载进容器)
+      CRUCIBLE_DATA_ROOT: /data
+    ports:
+      - "8080:8080"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+      - ${DATA_ROOT:-./data}:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pg-data:
+  hf-cache:
