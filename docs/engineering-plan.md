@@ -1,7 +1,19 @@
 # Crucible 工程化方案 (engineering plan)
 
-> 状态: 待确认启动 P1。核心融合引擎已冻结在 `core` 分支 (`v0.1.0-core`, commit 47c7cd2)。
+> 状态: P1 服务化 + P3a md/txt 上传 + P4a 前端已完成 (2026-09-03 夜)。
+> 核心融合引擎已冻结在 `core` 分支 (`v0.1.0-core`, commit 47c7cd2)。
 > 本文档记录工程化阶段的目标架构与决策, 实现细节决策点见 [decisions.md](decisions.md)。
+
+## 0. 进度
+
+| 项 | 状态 |
+|---|---|
+| P1a FastAPI + 引擎单例 | ✅ 实测 (enum 冷 10.6s → 热 5.6s) |
+| P1b PG 元数据层 | ✅ projects/ingestion_jobs/query_logs (SQLAlchemy async) |
+| P1c docker-compose + 统一 .env | 🔨 crucible 镜像构建中; postgres 已跑 (daocloud 镜像) |
+| P3a md/txt 上传双通道 | ✅ 实测 (原子写入 + 状态机 done) |
+| P4a 前端三页面 | ✅ Vue3+Element Plus, 构建产物由 FastAPI 托管 |
+| P2 引用层 / P3 MinerU / P5 对齐管理台账 / P6 MCP+RAGAS+SSO | ⏳ 后续 |
 
 ## 1. 目标形态
 
