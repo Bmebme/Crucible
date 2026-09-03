@@ -1,0 +1,189 @@
+<template>
+  <div>
+    <el-card shadow="never" class="query-card">
+      <el-form :inline="true" @submit.prevent>
+        <el-form-item label="查询类型">
+          <el-radio-group v-model="mode">
+            <el-radio-button value="query">融合查询</el-radio-button>
+            <el-radio-button value="enum">枚举</el-radio-button>
+            <el-radio-button value="experience">经验查询</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="项目">
+          <el-select v-model="projectId" style="width: 140px">
+            <el-option v-for="p in projects" :key="p.id" :label="p.id" :value="p.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="对齐模式">
+          <el-select v-model="aliasMode" style="width: 110px">
+            <el-option label="l2+l3" value="l2+l3" />
+            <el-option label="l3 (纯LLM)" value="l3" />
+            <el-option label="off" value="off" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="mode === 'experience'" label="环境">
+          <el-input v-model="env" placeholder="staging / production" style="width: 140px" />
+        </el-form-item>
+      </el-form>
+
+      <el-input
+        v-model="query"
+        :placeholder="placeholder"
+        size="large"
+        clearable
+        @keyup.enter="run"
+      >
+        <template #append>
+          <el-button type="primary" :loading="loading" @click="run">查询</el-button>
+        </template>
+      </el-input>
+
+      <div class="history-row">
+        <span class="hint">多轮历史（追问时用于指代消解，每行一条，最早在前）：</span>
+        <el-input
+          v-model="historyText"
+          type="textarea" :rows="2"
+          placeholder="MAE 有哪些外部接口？&#10;FM REST API 是做什么的？"
+        />
+      </div>
+    </el-card>
+
+    <el-card v-if="notes.length" shadow="never" class="notes-card">
+      <template #header>路由与合并</template>
+      <div class="notes">
+        <el-tag v-for="n in notes" :key="n" size="small" class="note-tag"
+          :type="n.includes('rewritten') ? 'warning' : n.includes('alias') ? 'success' : 'info'">
+          {{ n }}
+        </el-tag>
+      </div>
+    </el-card>
+
+    <el-card v-if="result" shadow="never" class="result-card">
+      <template #header>
+        <span>结果</span>
+        <el-tag v-if="result.routing" class="qtype" size="small"
+          :type="qtypeColor(result.routing.query_type)">
+          {{ result.routing.query_type }}
+          <template v-if="result.routing.confidence != null">· {{ result.routing.confidence }}</template>
+        </el-tag>
+        <span class="count">{{ result.results?.length ?? 0 }} 项</span>
+      </template>
+
+      <div v-if="result.results?.length" class="results">
+        <div v-for="(r, i) in result.results" :key="i" class="result-item">
+          <div class="ri-head">
+            <span class="ri-name">{{ r.title || r.name || r.conclusion?.slice(0, 60) || '结论' }}</span>
+            <el-tag v-for="p in r.provenance || []" :key="p" size="small" type="info">{{ p }}</el-tag>
+            <el-tag v-if="r.state" size="small" :type="stateColor(r.state)">{{ r.state }}</el-tag>
+            <el-tag v-if="r.weight != null" size="small" type="warning">w={{ r.weight }}</el-tag>
+            <el-tag v-if="r.confidence" size="small" type="success">{{ r.confidence }}</el-tag>
+          </div>
+          <div v-if="r.snippet" class="ri-snippet">{{ r.snippet }}</div>
+          <div v-if="r.note" class="ri-note">📌 {{ r.note }}</div>
+          <div v-if="r.path" class="ri-path">📄 {{ r.path }}</div>
+        </div>
+      </div>
+      <el-empty v-else description="无结果" />
+
+      <template v-if="result.differences?.length">
+        <el-divider content-position="left">
+          <b>差异清单</b>（知识缺口信号）{{ result.differences.length }} 项
+        </el-divider>
+        <el-table :data="result.differences.slice(0, 50)" size="small" max-height="320">
+          <el-table-column prop="only_in" label="缺失侧" width="90">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.only_in === 'rag' ? 'success' : 'warning'">{{ row.only_in }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="item" label="条目" min-width="260" show-overflow-tooltip />
+          <el-table-column prop="action" label="建议" min-width="240" show-overflow-tooltip />
+        </el-table>
+      </template>
+
+      <template v-if="result.conflicts?.length">
+        <el-divider content-position="left"><b>冲突对峙</b>（不裁决，交由 Agent/人）</el-divider>
+        <el-alert
+          v-for="(c, i) in result.conflicts" :key="i"
+          type="error" :closable="false" class="conflict"
+          :title="c.wiki_says?.claim?.slice(0, 80) || 'wiki 侧'"
+          :description="`rag 侧: ${c.rag_says?.claim?.slice(0, 120) || ''}`"
+        />
+      </template>
+    </el-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
+
+const mode = ref('query')
+const projectId = ref('')
+const projects = ref<Array<{ id: string }>>([])
+const aliasMode = ref('l2+l3')
+const env = ref('staging')
+const query = ref('')
+const historyText = ref('')
+const loading = ref(false)
+const result = ref<any>(null)
+const notes = ref<string[]>([])
+
+const placeholder = ref('例如: MAE 有哪些外部接口？')
+
+onMounted(async () => {
+  try {
+    projects.value = await listProjects()
+    projectId.value = projects.value[0]?.id ?? ''
+  } catch (e: any) {
+    ElMessage.warning('后端未连接: ' + (e?.message ?? e))
+  }
+})
+
+function qtypeColor(t: string) {
+  return { Q1: 'success', Q2: 'primary', Q3: 'warning' }[t] ?? 'info'
+}
+function stateColor(s: string) {
+  return {
+    verified_success: 'success', unverified: 'info',
+    verified_blocked: 'danger', false_positive: 'warning',
+  }[s] ?? 'info'
+}
+
+async function run() {
+  if (!query.value.trim()) { ElMessage.info('输入查询内容'); return }
+  loading.value = true
+  result.value = null
+  notes.value = []
+  try {
+    const history = historyText.value.split('\n').map((s) => s.trim()).filter(Boolean)
+    let data: any
+    if (mode.value === 'enum') data = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value)
+    else if (mode.value === 'experience') data = await fusionExperience(query.value.trim(), projectId.value, env.value)
+    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value })
+    result.value = data
+    notes.value = data.notes ?? []
+    if (data.differences?.length) ElMessage.success(`结果 ${data.results?.length ?? 0} 项, 差异 ${data.differences.length} 项`)
+  } catch (e: any) {
+    ElMessage.error('查询失败: ' + (e?.response?.data?.detail ?? e?.message ?? e))
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.query-card { margin-bottom: 16px; }
+.history-row { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.hint { font-size: 12px; color: #909399; }
+.notes { display: flex; flex-wrap: wrap; gap: 6px; }
+.qtype { margin-left: 8px; }
+.count { float: right; color: #909399; font-size: 13px; }
+.result-item { padding: 10px 0; border-bottom: 1px dashed #e4e7ed; }
+.ri-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ri-name { font-weight: 600; margin-right: 4px; }
+.ri-snippet { margin-top: 6px; color: #303133; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+.ri-note { margin-top: 4px; color: #b8860b; font-size: 12px; }
+.ri-path { margin-top: 4px; color: #909399; font-size: 12px; }
+.conflict { margin-bottom: 8px; }
+</style>
