@@ -65,6 +65,9 @@ class RagEngine:
                     max_token_size=512,
                     func=embedding_func,
                 ),
+                # L1 跨语言对齐 (设计文档 §5.5): 中文语料 → 中文实体名,
+                # 与 wiki 中文页面名同语言, M1 字符串归一化即可命中。
+                addon_params={"language": cfg.rag_language},
             )
             await self._rag.initialize_storages()
             self._QueryParam = QueryParam

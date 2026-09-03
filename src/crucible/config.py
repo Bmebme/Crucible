@@ -43,6 +43,12 @@ class Config:
         )
     )
     embed_dim: int = 512
+    # LightRAG 提取语言 (L1 跨语言对齐: 中文语料 → 中文实体名, §5.5)
+    rag_language: str = field(
+        default_factory=lambda: os.environ.get(
+            "CRUCIBLE_RAG_LANGUAGE", "Simplified Chinese"
+        )
+    )
 
     def rag_workdir_for(self, project_path: str) -> str:
         return self.rag_workdir or str(Path(project_path) / ".lightrag")

@@ -44,7 +44,11 @@ class WikiEngine:
         return hits
 
     async def list_pages(self, project_id: str) -> list[str]:
-        """wiki/ 下全部页面相对路径 (不含 .md)。"""
+        """wiki/ 下全部页面相对路径 (不含 .md)。
+
+        注意: files API 返回的是树结构 (isDir + children), 需递归展开;
+        index/log/overview 是导航页, 不属于枚举实体, 过滤掉。
+        """
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
                 f"{self.base_url}/api/v1/projects/{project_id}/files",
@@ -53,11 +57,24 @@ class WikiEngine:
             data = resp.json()
         if not data.get("ok"):
             return []
+
         paths: list[str] = []
-        for item in data.get("files") or []:
-            path = item.get("path") if isinstance(item, dict) else item
-            if isinstance(path, str) and path.endswith(".md"):
-                paths.append(path[: -len(".md")])
+
+        def walk(items: list[Any]) -> None:
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                path = item.get("path", "")
+                if item.get("isDir"):
+                    walk(item.get("children") or [])
+                    continue
+                if isinstance(path, str) and path.endswith(".md"):
+                    rel = path[: -len(".md")]
+                    if rel in ("wiki/index", "wiki/log", "wiki/overview"):
+                        continue
+                    paths.append(rel)
+
+        walk(data.get("files") or [])
         return paths
 
     async def read_page_frontmatter(self, project_id: str, path: str) -> dict[str, Any]:
