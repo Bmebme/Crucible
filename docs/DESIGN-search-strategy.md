@@ -264,15 +264,18 @@ Agent 拿到这些点后自行组合路径（拿点 → 看关联 → 再取点�
 
 ### 5.5 跨语言实体对齐 —— M1 的归一化前置
 
-**问题**（mae 项目实测暴露）：wiki 页面以中文命名（`er-ir-接口分类`），LightRAG 默认英文提取（`External Interface`、`IR Interface`）。M1 的字符串归一化（去 `.md`、去路径、大小写、空格）无法识别两者是同一实体 → 并集重复计入、差异清单充满假差异（实测 differences 几乎全是此类）。
+**问题**（mae 项目实测暴露）：内部文档以中文为常态，wiki 页面中文命名（`er-ir-接口分类`），而 LightRAG 默认英文提取（`DEFAULT_SUMMARY_LANGUAGE = "English"`，产出 `External Interface`、`IR Interface`）。M1 的字符串归一化（去 `.md`、去路径、大小写、空格）无法识别两者是同一实体 → 并集重复计入、差异清单充满假差异（实测 differences 几乎全是此类）。
+
+**定位**：中文语料是常态而非特例 —— **L1 是默认必做项**（不是可选优化），L2/L3 只兜底残留（技术标识符、缩写、复合名拆分，如 `er-ir-接口分类` vs `er接口`/`ir接口`）。
 
 **三层对齐方案**（按优先级执行，逐层兜底）：
 
-#### L1 源头统一 —— LightRAG 中文实体提取
+#### L1 源头统一 —— LightRAG 中文实体提取（默认必做）
 
 - 提取 prompt 增加规则：**实体名称使用源文档原文语言**（中文文档 → 中文实体名），技术标识符（Kafka/EMS/Swagger 等）保留原形
-- 通过 `addon_params` 定制实体类型（`endpoint`/`service`/`param`/`vuln_pattern`/`asset`…，见 DESIGN-vuln-agent-kb.md §7.3）
-- 效果：两边同语言后，现有字符串归一化即可命中，零额外对齐逻辑
+- **实现配置点**（LightRAG ≥1.5）：`addon_params={"language": "Simplified Chinese"}`（环境变量 `SUMMARY_LANGUAGE` 同效）；实体类型定制走 `entity_type_prompt_file`（`PROMPT_DIR/entity_type/*.yml`，`endpoint`/`service`/`param`/`vuln_pattern`/`asset`…，见 DESIGN-vuln-agent-kb.md §7.3）
+- **已实测**（mae/er.txt）：配置后实体全部中文输出（`er接口`/`ir接口`/`Hiro总线`/`微服务`），与 wiki 中文页面名同语言
+- 效果：两边同语言后，现有字符串归一化即可命中大部分，零额外对齐逻辑
 - 代价：需重新摄入；历史英文实体需迁移或靠 L2/L3 兜底
 
 #### L2 别名词典 —— 确定性映射
@@ -328,9 +331,11 @@ aliases:
 
 #### 实施顺序
 
-1. **L1 先行**：配置 LightRAG 中文实体提取 + 重新摄入（解决大部分，一次 prompt 配置）
-2. **L2 随用随补**：人工确认的映射写词典（轻量、自愈）
+1. **L1 默认必做**：配置 LightRAG 中文实体提取 + 重新摄入（解决跨语言主体问题，一次配置即可）
+2. **L2 随用随补**：残留的复合名拆分（`er-ir-接口分类` vs `er接口`+`ir接口`）、缩写、技术标识符映射写词典（轻量、自愈）
 3. **L3 后置**：词典与 L1 都覆盖不到、且清单量足够大时再上 LLM 对齐（多一轮 LLM 调用 + 人工队列成本）
+
+> 工程实现参考：`crucible` 项目 `engines/rag_engine.py`（addon_params.language 配置 + 中文摄入实测）。
 
 ---
 
