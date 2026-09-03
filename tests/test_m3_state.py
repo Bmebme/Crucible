@@ -37,9 +37,9 @@ def test_blocked_env_mismatch_filtered():
 
 def test_false_positive_only_for_误报排查():
     ordered = sort_by_verify_state([_item("false_positive")], query="上传接口有哪些参数")
-    assert ordered[0].weight == 0.0
+    assert ordered[0].weight == 0.0  # 普通查询: 不返回
     ordered = sort_by_verify_state([_item("false_positive")], query="为什么这个是误报")
-    assert ordered[0].weight == 0.0  # false_positive 权重恒 0, 仅 note 区分
+    assert ordered[0].weight == 0.5  # 误报排查: 与未验证同级返回, 供对照复核
 
 
 def test_content_not_rewritten():

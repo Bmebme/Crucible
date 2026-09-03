@@ -18,12 +18,15 @@ from .config import Config
 from .schemas import IntentConfig, QueryType
 
 # 规则信号表 (设计文档 §2.2) —— 按疑问结构判别, 不看领域词汇。
-# 顺序即优先级: 枚举信号最明确; 经验信号 (以前/被拦/验证过) 优先于
+# 顺序即优先级: 枚举信号最明确; 强经验信号 (以前/被拦/验证过) 优先于
 # 机制信号 —— 「以前这类场景怎么打的」虽有"怎么", 主信号是"以前"。
+# 弱经验信号 (裸「验证」) 排在机制之后 —— 「如何验证 X」仍走 Q2,
+# 「上传验证」这类无机制信号的查询才落 Q3。
 _RULES: list[tuple[re.Pattern, QueryType]] = [
     (re.compile(r"哪些|有哪些|类型|清单|列举|列出|全部|多少(个|种|类)?"), QueryType.ENUM),
     (re.compile(r"以前|历史|上次|最近|验证过|被拦|拦的|拦截|成功过|poc|payload", re.IGNORECASE), QueryType.EXPERIENCE),
     (re.compile(r"怎么|如何|调用|处理|版本|鉴权|实现|区别|是什么|工作原理|结果"), QueryType.MECHANISM),
+    (re.compile(r"验证|验证记录|实测记录|误报"), QueryType.EXPERIENCE),
 ]
 
 # 类型 → 召回通道 (设计文档 §5)

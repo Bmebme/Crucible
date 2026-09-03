@@ -96,3 +96,12 @@ def test_rewrite_llm_unavailable_degrades_to_original():
         )
     )
     assert result == "那这个接口呢"
+
+
+def test_experience_weak_rule_after_mechanism():
+    # 裸「验证」: 无机制信号 → Q3
+    result = classify_by_rules("上传验证")
+    assert result is not None and result.query_type == QueryType.EXPERIENCE
+    # 「如何验证」: 机制信号优先 → Q2
+    result2 = classify_by_rules("如何验证接口")
+    assert result2 is not None and result2.query_type == QueryType.MECHANISM

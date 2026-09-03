@@ -142,7 +142,13 @@ class FusionOrchestrator:
                 if hit.path
                 else {}
             )
-            items.append({**hit.to_dict(), "verify_state": fm.get("verify_state")})
+            items.append(
+                {
+                    **hit.to_dict(),
+                    "verify_state": fm.get("verify_state"),
+                    "verify_env": fm.get("verify_env"),
+                }
+            )
         ordered = sort_by_verify_state(items, env=env, query=query)
         resp.results = [
             {

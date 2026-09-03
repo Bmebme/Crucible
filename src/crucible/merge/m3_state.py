@@ -62,6 +62,8 @@ def sort_by_verify_state(
                 weight = 0.0
                 note = "误报记录，仅误报排查时返回"
             else:
+                # 误报排查: 与未验证同级返回, 供 Agent 对照复核
+                weight = 0.5
                 note = "误报记录"
         hits.append(SortedHit(item=item, state=state, weight=weight, note=note))
 
