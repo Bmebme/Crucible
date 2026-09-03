@@ -16,13 +16,17 @@ from ..schemas import WikiHit
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
+# wiki 后端是 localhost 服务: 禁止 httpx 读取环境代理 (trust_env),
+# 否则 HTTP_PROXY 等环境变量会把本机流量劫持到代理导致超时。
+_CLIENT_KW = {"timeout": 30.0, "trust_env": False}
+
 
 class WikiEngine:
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
 
     async def search(self, project_id: str, query: str, limit: int = 8) -> list[WikiHit]:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(**_CLIENT_KW) as client:
             resp = await client.post(
                 f"{self.base_url}/api/v1/projects/{project_id}/search",
                 json={"query": query, "limit": limit},
@@ -49,7 +53,7 @@ class WikiEngine:
         注意: files API 返回的是树结构 (isDir + children), 需递归展开;
         index/log/overview 是导航页, 不属于枚举实体, 过滤掉。
         """
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(**_CLIENT_KW) as client:
             resp = await client.get(
                 f"{self.base_url}/api/v1/projects/{project_id}/files",
                 params={"root": "wiki", "recursive": "true", "maxFiles": "500"},
@@ -79,7 +83,7 @@ class WikiEngine:
 
     async def read_page_frontmatter(self, project_id: str, path: str) -> dict[str, Any]:
         """读取页面 frontmatter (M3 verify_state 用)。失败返回空。"""
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(**_CLIENT_KW) as client:
             resp = await client.get(
                 f"{self.base_url}/api/v1/projects/{project_id}/files/content",
                 params={"path": path},

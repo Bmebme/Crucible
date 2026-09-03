@@ -20,7 +20,36 @@ os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 from ..config import Config
 from ..schemas import RagEntity
 
-_ENTITY_LINE_RE = re.compile(r'\{"entity"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"')
+_ENTITY_LINE_RE = re.compile(
+    r'\{"entity"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"'
+    r'(?:\s*,\s*"description"\s*:\s*"([^"]*)")?'
+)
+
+# Q1 枚举噪声过滤 (提取引导之外的兜底): 日期/版本号/数值/字段名/模板泄漏。
+# 注意: 这是 demo 级语料调优, 长期应由 entity_types_guidance 在源头解决。
+_NOISE_RES: list[re.Pattern] = [
+    re.compile(r"^\d{4}[./-]\d{1,2}"),        # 2025.1 / 2026-06-10
+    re.compile(r"^\d+(\.\d+)+$"),             # 3.2.1
+    re.compile(r"^\d+C\d+G$"),                # 32C128G
+    re.compile(r"^\d+(个|节点|集群)"),          # 48节点 / 3集群 / 100个微服务实例
+    re.compile(r"^\d+$"),                     # 纯数字
+    re.compile(r"^ENTITY_START|resource_or_entity"),  # 模板泄漏
+]
+_NOISE_NAMES: set[str] = {
+    "name", "type", "description", "definition", "definitions", "modules",
+    "module_id", "role", "responsibilities", "timestamp", "vendor",
+    "severity", "source_location", "sub_domains", "core_concepts",
+    "domain_boundary", "domain_name", "architecture_style",
+    "common_mechanisms", "tech_stack", "dependencies", "contracts",
+    "data_ownership", "artifact", "job", "entity description",
+    "an alarmrawmessage", "字段",
+}
+
+
+def _is_noise(name: str) -> bool:
+    if name.lower() in _NOISE_NAMES:
+        return True
+    return any(r.search(name) for r in _NOISE_RES)
 
 
 class RagEngine:
@@ -71,7 +100,12 @@ class RagEngine:
                 ),
                 # L1 跨语言对齐 (设计文档 §5.5): 中文语料 → 中文实体名,
                 # 与 wiki 中文页面名同语言, M1 字符串归一化即可命中。
-                addon_params={"language": cfg.rag_language},
+                # entity_types_guidance: 约束抽取类型, 抑制字段名/日期噪声
+                # (WeKnora 同款思路: 固定实体类型 + 自定义指令)。
+                addon_params={
+                    "language": cfg.rag_language,
+                    "entity_types_guidance": cfg.rag_entity_guidance,
+                },
             )
             await self._rag.initialize_storages()
             self._QueryParam = QueryParam
@@ -82,7 +116,11 @@ class RagEngine:
             return False
 
     async def enumerate_entities(self, project_path: str, hint: str) -> list[RagEntity]:
-        """实体枚举 (Q1 全通道)。以 local 模式取结构化实体 JSON。"""
+        """实体枚举 (Q1 全通道)。以 local 模式取结构化实体 JSON。
+
+        Q1 要求完整性: top_k 提到 400 避免默认 40 的截断; 噪声在客户端
+        再过滤一层 (提取引导之外的兜底)。
+        """
         if not await self.ensure_ready(project_path):
             return []
         prompt = f"列出文档中所有与「{hint}」相关的实体（组件/接口/服务/概念），逐条输出 JSON 实体清单"
@@ -90,7 +128,10 @@ class RagEngine:
             result = await self._rag.aquery(
                 prompt,
                 param=self._QueryParam(
-                    mode="local", only_need_context=True, enable_rerank=False
+                    mode="local",
+                    only_need_context=True,
+                    enable_rerank=False,
+                    top_k=400,
                 ),
             )
         except Exception:
@@ -98,11 +139,13 @@ class RagEngine:
         entities: list[RagEntity] = []
         seen: set[str] = set()
         for m in _ENTITY_LINE_RE.finditer(str(result)):
-            name, etype = m.group(1), m.group(2)
-            if name in seen:
+            name, etype, desc = m.group(1), m.group(2), (m.group(3) or "")
+            if not name or name in seen or _is_noise(name):
                 continue
             seen.add(name)
-            entities.append(RagEntity(name=name, entity_type=etype))
+            entities.append(
+                RagEntity(name=name, entity_type=etype, description=desc)
+            )
         return entities
 
     async def query(self, project_path: str, text: str, mode: str = "hybrid") -> str:

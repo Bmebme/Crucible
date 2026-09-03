@@ -49,6 +49,15 @@ class Config:
             "CRUCIBLE_RAG_LANGUAGE", "Simplified Chinese"
         )
     )
+    # LightRAG 实体类型引导 (§5.5 附注: 约束抽取目标类型, 抑制字段名/日期/版本号噪声)
+    rag_entity_guidance: str = field(
+        default_factory=lambda: os.environ.get(
+            "CRUCIBLE_RAG_ENTITY_GUIDANCE",
+            "实体应为产品知识中的组件、接口、服务、模块、架构概念、领域、协议、部署形态等。"
+            "不要提取日期、版本号、数值、文档结构字段名(如 name/type/description)、"
+            "表格表头、以及 ENTITY_START 之类的模板占位符。",
+        )
+    )
 
     def rag_workdir_for(self, project_path: str) -> str:
         return self.rag_workdir or str(Path(project_path) / ".lightrag")
