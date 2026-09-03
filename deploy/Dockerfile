@@ -11,14 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libgomp1 curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 先装依赖再拷代码 (利用层缓存)
+# 拷代码 + 安装 (editable 安装需要 src 在场; rag 装失败则降级为基础包)
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e ".[rag,server]" || pip install --no-cache-dir -e .
-
 COPY src ./src
 COPY backend ./backend
 COPY frontend/dist ./frontend/dist
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e ".[rag,server]" || pip install --no-cache-dir -e .
 
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "backend"]
