@@ -10,8 +10,12 @@ LightRAG 的 local/hybrid 查询取结构化实体 JSON —— 内部 demo 版�
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Any
+
+# HuggingFace 直连不稳定 —— 走国内镜像 (与 llm_wiki 调试约定一致)
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 from ..config import Config
 from ..schemas import RagEntity
