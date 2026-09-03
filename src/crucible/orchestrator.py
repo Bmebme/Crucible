@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from .classifier import classify, merge_mode
+from .classifier import classify, merge_mode, rewrite_if_needed
 from .config import Config
 from .engines.rag_engine import RagEngine
 from .engines.wiki_engine import WikiEngine
@@ -31,18 +31,25 @@ class FusionOrchestrator:
         self.wiki = WikiEngine(self.config.wiki_base)
         self.rag = RagEngine(self.config)
 
-    async def run(self, query: str, *, env: str = "") -> FusionResponse:
-        routing = await classify(query, self.config)
+    async def run(
+        self, query: str, *, env: str = "", history: list[str] | None = None
+    ) -> FusionResponse:
+        # 多轮追问: 先指代消解/省略补全 (§10.2), 所有引擎用消解后的查询。
+        # history 为用户最近几轮提问 (最早在前)。
+        resolved = await rewrite_if_needed(query, history, self.config)
+        routing = await classify(resolved, self.config)
         mode = merge_mode(routing.query_type)
         response = FusionResponse(query=query, routing=routing)
         response.notes.append(f"merge_mode={mode}")
+        if resolved != query:
+            response.notes.append(f"rewritten_to={resolved}")
 
         if routing.query_type == QueryType.ENUM:
-            await self._run_enum(query, response)
+            await self._run_enum(resolved, response)
         elif routing.query_type == QueryType.EXPERIENCE:
-            await self._run_experience(query, response, env)
+            await self._run_experience(resolved, response, env)
         else:
-            await self._run_mechanism(query, response)
+            await self._run_mechanism(resolved, response)
 
         # 混合查询的子查询: 并行触发各自模式 (结果统一返回)
         for sub in routing.sub_queries:
@@ -50,7 +57,7 @@ class FusionOrchestrator:
             sub_text = str(sub.get("text", ""))
             if not sub_text or sub_type == routing.query_type:
                 continue
-            sub_resp = await self.run(sub_text, env=env)
+            sub_resp = await self.run(sub_text, env=env, history=history)
             response.results.extend(
                 {"sub_query": sub_text, **r} for r in sub_resp.results
             )

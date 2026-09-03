@@ -25,6 +25,12 @@ def main() -> None:
 
     q = sub.add_parser("query", help="融合查询 (判别 → 双引擎 → 合并)")
     q.add_argument("text")
+    q.add_argument(
+        "--history",
+        action="append",
+        default=None,
+        help="多轮追问的历史用户提问 (可重复, 最早在前), 用于指代消解",
+    )
     _common(q)
 
     e = sub.add_parser("enum", help="Q1 枚举查询 (M1 并集合并)")
@@ -34,6 +40,12 @@ def main() -> None:
     x = sub.add_parser("experience", help="Q3 经验查询 (M3 状态排序)")
     x.add_argument("text")
     x.add_argument("--env", default="")
+    x.add_argument(
+        "--history",
+        action="append",
+        default=None,
+        help="多轮追问的历史用户提问 (可重复, 最早在前), 用于指代消解",
+    )
     _common(x)
 
     args = parser.parse_args()
@@ -45,7 +57,9 @@ def main() -> None:
 
     async def run() -> None:
         if args.cmd == "query":
-            resp = await orch.run(args.text, env=getattr(args, "env", ""))
+            resp = await orch.run(
+                args.text, env=getattr(args, "env", ""), history=args.history
+            )
         elif args.cmd == "enum":
             # 枚举查询: 走 Q1 通道
             from .classifier import classify
@@ -66,7 +80,7 @@ def main() -> None:
                 f"union={len(merged.union)} differences={len(merged.differences)}"
             )
         else:
-            resp = await orch.run(args.text, env=args.env)
+            resp = await orch.run(args.text, env=args.env, history=args.history)
         _print_response(resp)
 
     asyncio.run(run())

@@ -142,3 +142,85 @@ async def classify(query: str, config: Config) -> IntentConfig:
 
 def merge_mode(qtype: QueryType) -> str:
     return _MERGE_MODE[qtype]
+
+
+# ---- 多轮追问改写 (设计文档 §10.2 采纳 WeKnora 的 QUERY_UNDERSTAND) ----
+
+# 未消解指代 / 省略追问的锚点。只做检测, 消解交给 LLM (带历史)。
+_FOLLOWUP_RES: list[re.Pattern] = [
+    re.compile(r"那[个些]?"),
+    re.compile(r"这[个些]?"),
+    re.compile(r"它|它们"),
+    re.compile(r"其"),
+    re.compile(r"上述|前面|之前|刚才|刚刚|上面"),
+]
+_SHORT_ELLIPSIS_RE = re.compile(r"[呢吗]\s*[?？]*$")
+
+_QUERY_LEN_MAX = 12  # 短问句 + 呢/吗 结尾视为省略追问
+
+_REWRITE_PROMPT = """将多轮对话中的追问改写为自包含的独立查询。
+规则:
+1. 解析指代 (这个/那个/它/其/上述) 为历史提问中的具体对象
+2. 补全省略成分 (如"接口呢" → 补出历史中的主体)
+3. 保留原问题的类型结构 (枚举/机制/经验), 不改写成另一种问法
+4. 只输出改写后的查询文本, 一行, 不要解释、不要引号
+
+# 对话历史 (用户最近几轮提问, 最早在前)
+{history}
+
+# 当前追问
+{query}
+"""
+
+
+def _is_followup(query: str) -> bool:
+    """检测追问信号: 未消解指代, 或短问句以 呢/吗 结尾 (省略追问)。"""
+    stripped = query.strip().rstrip("?？").strip()
+    if any(r.search(query) for r in _FOLLOWUP_RES):
+        return True
+    return bool(_SHORT_ELLIPSIS_RE.search(stripped)) and len(stripped) <= _QUERY_LEN_MAX
+
+
+async def _rewrite_by_llm(
+    query: str, history: list[str], config: Config
+) -> str | None:
+    """LLM 指代消解 + 省略补全。失败返回 None (由上层原样降级)。"""
+    if not config.llm_api_key:
+        return None
+    recent = "\n".join(f"- {h}" for h in history[-6:])
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{config.llm_base}/chat/completions",
+                headers={"Authorization": f"Bearer {config.llm_api_key}"},
+                json={
+                    "model": config.llm_model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": _REWRITE_PROMPT.format(
+                                history=recent, query=query
+                            ),
+                        }
+                    ],
+                    "temperature": 0,
+                },
+            )
+            resp.raise_for_status()
+            rewritten = resp.json()["choices"][0]["message"]["content"].strip()
+    except (httpx.HTTPError, KeyError, IndexError, json.JSONDecodeError):
+        return None
+    if not rewritten or len(rewritten) > 200:
+        return None
+    return rewritten
+
+
+async def rewrite_if_needed(
+    query: str, history: list[str] | None, config: Config
+) -> str:
+    """多轮追问入口: 无历史或非追问时原样返回; 追问时 LLM 改写,
+    改写失败原样降级 (检索按原查询走, 结果层按保守策略呈现)。"""
+    if not history or not _is_followup(query):
+        return query
+    rewritten = await _rewrite_by_llm(query, history, config)
+    return rewritten or query

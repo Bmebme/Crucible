@@ -45,3 +45,54 @@ def test_merge_mode_mapping():
     assert merge_mode(QueryType.ENUM) == "M1"
     assert merge_mode(QueryType.MECHANISM) == "M2"
     assert merge_mode(QueryType.EXPERIENCE) == "M3"
+
+
+"""多轮追问改写: 检测 + 降级路径 (纯函数, 无网络)。"""
+import asyncio
+
+from crucible.classifier import _is_followup, rewrite_if_needed
+from crucible.config import Config
+
+
+def test_is_followup_true():
+    for q in [
+        "那这个接口呢",
+        "它的鉴权怎么做",
+        "上述组件有哪些",
+        "接口呢",
+        "那它的验证结果呢？",
+    ]:
+        assert _is_followup(q), q
+
+
+def test_is_followup_false():
+    for q in [
+        "MAE 有哪些组件？",
+        "hiro 总线是什么？",
+        "鉴权在哪一层做的？",
+        "文件名是怎么进入 convert 命令的？",
+    ]:
+        assert not _is_followup(q), q
+
+
+def test_rewrite_no_history_returns_original():
+    # 无历史: 不触发改写, 且不发网络请求
+    result = asyncio.run(rewrite_if_needed("那这个接口呢", None, Config()))
+    assert result == "那这个接口呢"
+
+
+def test_rewrite_no_followup_returns_original():
+    result = asyncio.run(
+        rewrite_if_needed("MAE 有哪些组件？", ["MAE 有哪些接口？"], Config())
+    )
+    assert result == "MAE 有哪些组件？"
+
+
+def test_rewrite_llm_unavailable_degrades_to_original():
+    # 无 LLM key: 改写失败, 原样降级 (不发网络请求)
+    result = asyncio.run(
+        rewrite_if_needed(
+            "那这个接口呢", ["MAE 有哪些接口？"], Config(llm_api_key="")
+        )
+    )
+    assert result == "那这个接口呢"
