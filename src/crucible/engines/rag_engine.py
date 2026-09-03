@@ -45,6 +45,10 @@ _NOISE_NAMES: set[str] = {
     "an alarmrawmessage", "字段",
 }
 
+# 类型级噪声: guidance 约束后出现的兜底类型 (如 LLM 归类不出的"其他").
+# demo 级语料调优, 由 CRUCIBLE_RAG_ENTITY_GUIDANCE 在源头解决为主。
+_NOISE_TYPES: set[str] = {"其他"}
+
 
 def _is_noise(name: str) -> bool:
     if name.lower() in _NOISE_NAMES:
@@ -140,7 +144,7 @@ class RagEngine:
         seen: set[str] = set()
         for m in _ENTITY_LINE_RE.finditer(str(result)):
             name, etype, desc = m.group(1), m.group(2), (m.group(3) or "")
-            if not name or name in seen or _is_noise(name):
+            if not name or name in seen or _is_noise(name) or etype in _NOISE_TYPES:
                 continue
             seen.add(name)
             entities.append(
