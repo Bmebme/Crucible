@@ -109,3 +109,7 @@ docs/             设计文档 + 决策记录 + 工程计划 + 部署指南 + �
 | [engineering-plan.md](engineering-plan.md) | 工程化目标架构 + 进度表 |
 | [decisions.md](decisions.md) | 13+ 条关键决策: 背景/决策/实现位置/调整入口（调策略先看这里） |
 | [DESIGN-search-strategy.md](../../knowledge-fusion/DESIGN-search-strategy.md) | 设计原理（知识融合理念, 在 knowledge-fusion 仓库） |
+
+> 多产品建项必读: llm-wiki 项目目录必须含 schema.md (页面类型约定),
+> 否则 open project 报 "Not a valid wiki project (missing schema.md)"。
+> 新项目从现有项目复制 schema.md 即可。
