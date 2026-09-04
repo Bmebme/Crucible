@@ -77,6 +77,10 @@ crucible experience "上传验证" --env staging --project-path <path>
 
 其余见 `backend/app/config.py` (env 前缀 CRUCIBLE_)。
 
+## 部署
+
+完整指南: [docs/deploy.md](docs/deploy.md) (本机快速启动 / 服务器部署 / 模型补全 / 网络约定)。
+
 ## API 摘要
 
 | 端点 | 说明 |

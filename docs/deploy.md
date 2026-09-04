@@ -1,0 +1,126 @@
+# Crucible 部署指南
+
+> 2026-09-04 更新。本文覆盖两种形态: 本机快速启动 (当前可用) 与服务器部署
+> (含已知缺口)。架构与决策见 [engineering-plan.md](engineering-plan.md)。
+
+## 1. 架构总览
+
+```
+浏览器 ──→ crucible:8080 (融合服务+UI) ─┬─→ llm-wiki daemon:19828 (页面引擎, 当前为宿主机进程)
+                                        ├─→ postgres:5432 (元数据层)
+                                        ├─→ docreader:8081 (MinerU 文档解析)
+                                        └─→ LightRAG (进程内, 数据在 <project>/.lightrag-*)
+```
+
+依赖关系: crucible 是唯一入口; llm-wiki 与 docreader 是它的两个后端服务;
+PG 存元数据; 项目数据目录 (wiki 文件 + LightRAG 工作目录) 被挂载进 crucible。
+
+## 2. 本机快速启动 (当前机器, 已验证)
+
+```bash
+# 0. 前置: Docker Desktop 运行中; llm-wiki daemon 跑在本机 19828 (py-llm-wiki)
+
+cd deploy
+cp .env.example .env        # 填 LLM_API_KEY; 检查 HF_CACHE_HOST/DATA_ROOT 路径
+docker compose up -d        # 起 postgres + crucible + docreader
+
+# 1. 注册项目 (注意: 容器内路径 = /data/<项目名>, 即 DATA_ROOT/<项目名>)
+curl -X POST http://127.0.0.1:8080/projects -H 'Content-Type: application/json' \
+  -d '{"id":"mae","path":"/data/mae","wiki_project_id":"current",
+       "rag_workdir":"/data/mae/.lightrag-zh2"}'
+
+# 2. 打开 UI
+open http://127.0.0.1:8080
+```
+
+镜像说明: 本机 docreader 用的是 `deploy-docreader:with-models`
+(docker commit 自实测容器, 模型已烧入); crucible 由 Dockerfile 构建。
+
+## 3. 服务器部署 (新机器)
+
+### 3.1 已知缺口 (按顺序解决)
+
+1. **镜像可移植性** — `deploy-docreader:with-models` 是本地 commit 产物,
+   不在仓库里。服务器上需要: `docker compose build docreader` (Dockerfile
+   配方已实测) + 模型下载 (见 3.3)。或将镜像推送到私有 registry。
+2. **llm-wiki daemon 未容器化** — 当前是宿主机进程 (py-llm-wiki 仓库
+   clone + conda/venv 安装 + 19828 启动)。容器化列为后续任务; 服务器上
+   先按 py-llm-wiki 的 README 部署 daemon, crucible 通过
+   `CRUCIBLE_WIKI_BASE=http://<llm-wiki-host>:19828` 访问。
+3. **项目数据迁移** — wiki 文件 + `.lightrag-*` 工作目录需拷贝到服务器
+   DATA_ROOT 下; PG 元数据 (projects 表) 可重新注册, 台账/审核队列如需
+   保留则 pg_dump 迁移。
+
+### 3.2 步骤
+
+```bash
+# 0. 前置: Docker + docker compose; 网络需要能访问
+#    pypi.tuna / mirrors.aliyun / hf-mirror / modelscope.cn (见下)
+
+git clone <repo> && cd crucible/deploy
+cp .env.example .env && vim .env   # LLM_API_KEY, HF_CACHE_HOST, DATA_ROOT
+
+docker pull docker.m.daocloud.io/library/postgres:16-alpine   # Docker Hub 被墙时
+docker tag docker.m.daocloud.io/library/postgres:16-alpine postgres:16-alpine
+docker pull docker.m.daocloud.io/library/python:3.12-slim
+docker tag docker.m.daocloud.io/library/python:3.12-slim python:3.12-slim
+
+docker compose build   # crucible + docreader (首次 ~30-60 分钟, 含 torch 下载)
+docker compose up -d postgres
+```
+
+### 3.3 MinerU 模型 (一次性, 有坑已踩平)
+
+HF 镜像缺 5 个模型目录的 LFS 文件 (TabRec/TabCls/MFD/OriCls/ReadingOrder),
+ModelScope 有全量但目录级下载 API 有缺陷。补救脚本已入库:
+
+```bash
+# 1. 先跑一次解析触发基础模型下载 (Layout/MFR/OCR)
+docker exec -i deploy-docreader-1 curl -s -F "file=@<任意.pdf>" http://localhost:8081/parse > /dev/null
+
+# 2. 补全缺失目录 (~3GB, 含 1.87GB StructEqTable safetensors)
+docker cp scripts/fetch_mineru_models.py deploy-docreader-1:/tmp/
+docker exec -i deploy-docreader-1 python3 /tmp/fetch_mineru_models.py
+
+# 3. 把容器连同模型 commit 成本地镜像 (省去下次下载)
+docker commit deploy-docreader-1 deploy-docreader:with-models
+```
+
+### 3.4 注册项目 + 验证
+
+```bash
+curl -X POST http://localhost:8080/projects -H 'Content-Type: application/json' \
+  -d '{"id":"<name>","path":"/data/<name>","wiki_project_id":"<llm-wiki 侧 id>"}'
+curl -s http://localhost:8080/health      # wiki ok + rag ready
+curl -s -X POST http://localhost:8080/fusion/enum -d '{"hint":"组件","project_id":"<name>"}' -H 'Content-Type: application/json'
+```
+
+## 4. 网络与镜像源约定 (国内网络环境实测)
+
+| 资源 | 约定 |
+|---|---|
+| pip | crucible/Dockerfile 用 tuna; docreader 大包 (torch) 走 tuna, 其余 aliyun (aliyun 的 torch 校验和坏包, 已避开) |
+| HF 模型 | HF_ENDPOINT=https://hf-mirror.com + 缓存目录绑定; 缺失 LFS 走 ModelScope 补全脚本 |
+| Docker Hub | 被墙时走 docker.m.daocloud.io 拉取后本地 tag |
+| GitHub | 间歇性阻断, 推送失败重试即可 |
+| LLM | DeepSeek, deploy/.env 统一配置 (唯一事实源) |
+
+## 5. 常见问题
+
+1. **查询返回空/rag=0** — 项目 path 是容器内路径 (/data/...) 但容器里不存在
+   → 检查 DATA_ROOT 绑定与注册路径 (本地/容器命名空间不同, 见
+   engineering-plan 进度表备注)。
+2. **docreader 解析失败** — 看 `docker logs deploy-docreader-1`: 模型缺失
+   (NoSuchFile) → 跑 3.3 补全; OOM → mem_limit 已是 6g, 换更小的 PDF 或
+   增大 Docker Desktop 内存。
+3. **首次 enum 慢 (~10s)** — 正常的 LightRAG 模型加载, 之后热缓存 ~5s。
+4. **M2 无结论** — LLM 不可用或两引擎无召回, 降级并列输出是设计行为
+   (响应 notes 里有说明)。
+
+## 6. 待办 (部署侧)
+
+- [ ] llm-wiki daemon 容器化 (Dockerfile + env 覆盖 llmConfig)
+- [ ] 镜像推送私有 registry (免服务器重复构建)
+- [ ] torch CPU-only 构建 (镜像 9.88GB → ~6GB)
+- [ ] PG 备份脚本 (pg_dump + 项目目录打包)
+- [ ] SSO 接入 (待组织方案)
