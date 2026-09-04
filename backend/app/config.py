@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     # —— 文档解析 (P3) ——
     docreader_base: str = ""  # 空 = 不启用二进制转换
+    # llm-wiki 侧项目根路径 (同步创建项目用, 容器内挂载点)
+    llm_wiki_projects_root: str = "/projects"
 
     # —— 数据库 ——
     database_url: str = "postgresql+asyncpg://crucible:crucible@127.0.0.1:5432/crucible"
