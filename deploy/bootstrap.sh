@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "[1/5] .env 配置"
+echo "[1/6] .env 配置"
 if [ ! -f .env ]; then
   cp .env.example .env
   echo "  → 已生成 .env, 请填入 LLM_API_KEY 后重新执行"
