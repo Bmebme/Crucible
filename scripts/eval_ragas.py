@@ -54,26 +54,36 @@ async def run_fusion_queries(api: str, project: str, dataset: list[dict]) -> lis
     return results
 
 
-def evaluate_with_ragas(results: list[dict], llm_base: str, llm_key: str, llm_model: str) -> dict:
+def evaluate_with_ragas(
+    results: list[dict], llm_base: str, llm_key: str, llm_model: str,
+    with_context: bool = False,
+) -> dict:
     from datasets import Dataset
     from langchain_openai import ChatOpenAI
     from ragas import evaluate
-    from ragas.metrics import (
-        answer_relevancy,
-        context_precision,
-        context_recall,
-        faithfulness,
-    )
+    from ragas.metrics import answer_relevancy, faithfulness
 
     llm = ChatOpenAI(
         model=llm_model, api_key=llm_key, base_url=llm_base, temperature=0,
     )
-    ds = Dataset.from_list(results)
-    scores = evaluate(
-        ds,
-        metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
-        llm=llm,
+    metrics = [faithfulness, answer_relevancy]
+    if with_context:
+        from ragas.metrics import context_precision, context_recall
+
+        metrics += [context_precision, context_recall]
+    # ragas 0.3 的 evaluate 总会构造默认 OpenAIEmbeddings (DeepSeek 无
+    # embeddings API 会炸), 必须显式传本地 bge 嵌入
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from ragas.embeddings import LangchainEmbeddingsWrapper
+
+    embedding = LangchainEmbeddingsWrapper(
+        HuggingFaceEmbeddings(
+            model_name="BAAI/bge-small-zh-v1.5",
+            encode_kwargs={"normalize_embeddings": True},
+        )
     )
+    ds = Dataset.from_list(results)
+    scores = evaluate(ds, metrics=metrics, llm=llm, embedding=embedding)
     return scores.to_pandas().mean(numeric_only=True).to_dict()
 
 
@@ -82,6 +92,10 @@ def main() -> None:
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--project", default="mae")
     parser.add_argument("--api", default="http://127.0.0.1:8080")
+    parser.add_argument(
+        "--with-context", action="store_true",
+        help="启用 context_precision/context_recall (需本地 bge 嵌入)",
+    )
     args = parser.parse_args()
 
     llm_base = os.environ.get("EVAL_LLM_BINDING_HOST", os.environ.get("CRUCIBLE_LLM_BASE", "https://api.deepseek.com/v1"))
@@ -91,7 +105,9 @@ def main() -> None:
     dataset = load_dataset(args.dataset)
     results = asyncio.run(run_fusion_queries(args.api, args.project, dataset))
     print(f"样本数: {len(results)}; 有引用的样本: {sum(1 for r in results if r['contexts'])}")
-    scores = evaluate_with_ragas(results, llm_base, llm_key, llm_model)
+    scores = evaluate_with_ragas(
+        results, llm_base, llm_key, llm_model, with_context=args.with_context
+    )
     print("RAGAS 平均分:")
     print(json.dumps(scores, ensure_ascii=False, indent=2))
 
