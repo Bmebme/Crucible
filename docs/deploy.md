@@ -15,7 +15,29 @@
 依赖关系: crucible 是唯一入口; llm-wiki 与 docreader 是它的两个后端服务;
 PG 存元数据; 项目数据目录 (wiki 文件 + LightRAG 工作目录) 被挂载进 crucible。
 
-## 2. 本机快速启动 (当前机器, 已验证)
+## 2. GitHub 一键启动 (推荐路径)
+
+```bash
+git clone <repo> && cd crucible/deploy
+./bootstrap.sh
+# 首次: 生成 .env → 填入 LLM_API_KEY → 再跑一次 ./bootstrap.sh
+```
+
+bootstrap.sh 自动完成: .env 检查 → 基础镜像经 daocloud 绕 Docker Hub →
+构建 (crucible + docreader) → 启动 → 健康检查 → 打印注册项目提示。
+
+**一键的边界** (仍需手工):
+- `.env` 里的 LLM_API_KEY (secrets 不入库)
+- llm-wiki daemon (py-llm-wiki 仓库, 未容器化)
+- 项目数据 (wiki 文件 + `.lightrag-*`)
+
+**docreader 两档**:
+- 默认: markitdown 轻量版 (构建 ~5 分钟, 解析质量一般)
+- 完整 MinerU: 按 §3.3 生成 `deploy-docreader:with-models` 镜像后,
+  在 `.env` 设 `DOCREADER_FULL_IMAGE=deploy-docreader:with-models`,
+  `docker compose up -d docreader` 即切换 (crucible 无需改动)
+
+## 2.1 本机快速启动 (当前机器, 已验证)
 
 ```bash
 # 0. 前置: Docker Desktop 运行中; llm-wiki daemon 跑在本机 19828 (py-llm-wiki)
