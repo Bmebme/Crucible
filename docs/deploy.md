@@ -170,3 +170,43 @@ docker compose up -d
    OpenAI 兼容的 LLM 接口; 无则这些能力静默降级 (规则判别/M1 仍可用)
 3. **内网 LightRAG demo**: 若启用, 把 rag_engine 换 HTTP 客户端指向它
    (待办: 同契约替换)
+
+## 8. crucible 镜像的内源清单 (内网构建用)
+
+crucible 镜像 (deploy/Dockerfile) 构建下载三类东西:
+
+### 8.1 基础镜像 + apt
+
+```
+python:3.12-slim (Docker Hub → 内网 registry 代理)
+apt: libgomp1 curl (debian trixie, 无 build-essential —— wheel 安装足够)
+```
+
+### 8.2 pip 包 (115 个, 大头清单)
+
+| 大头 | 大小 | 说明 |
+|---|---|---|
+| torch 2.14.0 | ~850MB | linux/amd64 默认捆绑 CUDA |
+| nvidia-cudnn-cu13 9.24.0.43 | 651MB | CUDA 链 (后续 CPU-only 瘦身可省) |
+| nvidia-cublas-cu13 13.1.1.3 | 543MB | 同上 |
+| nvidia-cusparselt-cu13 0.8.1 | 221MB | 同上 |
+| nvidia-nccl-cu13 2.30.7 | 216MB | 同上 |
+| nvidia-curand/nvshmem/cufft/cusolver/cusparse/nvjitlink/nvtx/cuda-runtime/cuda-nvrtc/cuda-cupti/cufile + cuda-toolkit + cuda-bindings | ~300MB | CUDA 依赖链完整集合 |
+
+功能依赖 (版本取自 linux 解析): lightrag-hku 1.5.7, sentence-transformers,
+transformers 5.x, tokenizers, safetensors, huggingface-hub, scikit-learn, scipy,
+numpy, pandas, networkx, tiktoken, aiohttp, nano-vectordb, pipmaster, google-genai,
+google-api-core/google-auth/protobuf/grpc 链, fastapi/starlette/uvicorn, sqlalchemy/
+asyncpg/alembic/greenlet, pydantic/pydantic-core, httpx, python-multipart, pyyaml,
+typer/rich, triton, sympy, regex, xlsxwriter, pypinyin, json_repair, tenacity,
+python-dotenv, requests/urllib3, yarl/multidict/frozenlist/propcache (aiohttp 链)
+
+**内源配置**: 若内源是全量 PyPI 代理 (Nexus/Artifactory/devpi), 无需手工清单,
+`ENV PIP_INDEX_URL=http://<内源>/simple` 即自动; 若手工同步, 注意 CUDA 链
+(nvidia-*) 与 torch 轮子必须取 linux/amd64 的 manylinux 版本, 且**大包要在
+内源预热缓存** (首次构建 4GB 下载量, 内源缓存后分钟级)。
+
+### 8.3 运行时模型 (非构建期, 摆渡包已含)
+
+bge-small-zh-v1.5 嵌入 (HF 缓存) + tiktoken cl100k_base + MinerU 模型
+(docreader 镜像已烧入) —— 见 §7 离线摆渡。
