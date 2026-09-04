@@ -5,6 +5,8 @@
       <el-menu mode="horizontal" :default-active="$route.path" router class="menu">
         <el-menu-item index="/">查询工作台</el-menu-item>
         <el-menu-item index="/upload">上传中心</el-menu-item>
+        <el-menu-item index="/ledger">知识台账</el-menu-item>
+        <el-menu-item index="/aliases">对齐管理</el-menu-item>
         <el-menu-item index="/projects">项目中心</el-menu-item>
       </el-menu>
     </el-header>

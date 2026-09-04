@@ -65,3 +65,53 @@ class QueryLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class DiffLedger(Base):
+    """M1 差异台账 (P5): 每次枚举的差异快照, 支持收敛趋势。"""
+
+    __tablename__ = "diff_ledger"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    query: Mapped[str] = mapped_column(Text, default="")
+    item: Mapped[str] = mapped_column(Text)
+    only_in: Mapped[str] = mapped_column(String(8))  # wiki | rag
+    action: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open|resolved
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ConflictLedger(Base):
+    """M2 冲突台账 (P5): 对峙双方 + 裁决结果 (§8.2 回写闭环)。"""
+
+    __tablename__ = "conflict_ledger"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    query: Mapped[str] = mapped_column(Text, default="")
+    wiki_says: Mapped[dict] = mapped_column(JSON, default=dict)
+    rag_says: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolution: Mapped[str] = mapped_column(String(32), default="")  # wiki|rag|both|none|回填记录
+    note: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open|resolved
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class AliasReview(Base):
+    """L3 审核队列 (P5): LLM 判定等价对, 人工确认后回写词典。"""
+
+    __tablename__ = "alias_reviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    name_a: Mapped[str] = mapped_column(String(256))
+    name_b: Mapped[str] = mapped_column(String(256))
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|approved|rejected
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

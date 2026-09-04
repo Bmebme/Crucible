@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     alias_mode: str = "l2+l3"
     aliases_file: str = "kb-aliases.yaml"
 
+    # —— 文档解析 (P3) ——
+    docreader_base: str = ""  # 空 = 不启用二进制转换
+
     # —— 数据库 ——
     database_url: str = "postgresql+asyncpg://crucible:crucible@127.0.0.1:5432/crucible"
 

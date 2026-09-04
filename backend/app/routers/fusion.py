@@ -77,6 +77,12 @@ async def fusion_query(req: QueryRequest) -> dict:
         next((n for n in resp.notes if n.startswith("rewritten_to=")), ""),
         (time.monotonic() - t0) * 1000, "query",
     )
+    try:
+        from ..services import ledger as ledger_svc
+
+        await ledger_svc.save_conflicts(req.project_id, req.query, data.get("conflicts", []))
+    except Exception:
+        pass
     return data
 
 
@@ -101,6 +107,16 @@ async def fusion_enum(req: EnumRequest) -> dict:
         req.project_id, f"enum:{req.hint}", "Q1", orch.config.alias_mode, "",
         (time.monotonic() - t0) * 1000, "enum",
     )
+    # P5 落账: 差异清单 + L3 判定对进审核队列 (失败不影响查询)
+    try:
+        from ..services import ledger as ledger_svc
+
+        await ledger_svc.save_enum_artifacts(
+            req.project_id, f"enum:{req.hint}",
+            data.get("differences", []), data.get("notes", []),
+        )
+    except Exception:
+        pass
     return data
 
 
@@ -125,4 +141,10 @@ async def fusion_experience(req: ExperienceRequest) -> dict:
         next((n for n in resp.notes if n.startswith("rewritten_to=")), ""),
         (time.monotonic() - t0) * 1000, "experience",
     )
+    try:
+        from ..services import ledger as ledger_svc
+
+        await ledger_svc.save_conflicts(req.project_id, req.query, data.get("conflicts", []))
+    except Exception:
+        pass
     return data

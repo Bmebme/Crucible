@@ -1,0 +1,22 @@
+# DocReader: 二进制文档 → Markdown (MinerU 优先, markitdown 兜底)
+FROM python:3.12-slim
+
+# 国内镜像 (aliyun: mineru/markitdown 都在; tuna 没有这两个包)
+ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 libgl1 libglib2.0-0 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir fastapi uvicorn python-multipart markitdown \
+    && pip install --no-cache-dir "mineru[core]" || echo "mineru install failed, markitdown-only"
+
+WORKDIR /srv
+COPY docreader/app ./app
+
+# 模型缓存目录 (首次解析时从 ModelScope 下载)
+VOLUME /models
+ENV MINERU_MODEL_SOURCE=modelscope
+
+EXPOSE 8081
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8081"]

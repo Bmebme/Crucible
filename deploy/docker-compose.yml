@@ -1,6 +1,7 @@
 # Crucible 工程化栈 (docs/engineering-plan.md)
-# 今晚最小可用: postgres + crucible; llm-wiki 本地 19828 (host.docker.internal)
-# P1c 后续: lightrag 服务容器 + mineru (镜像/模型下载待网络窗口)
+# 服务: crucible(融合) + postgres(元数据) + docreader(MinerU/markitdown 文档解析)
+# llm-wiki 为宿主机 19828 (容器内经 host.docker.internal 访问);
+# lightrag 当前进程内 (demo), 内网版上线后独立容器同契约替换
 services:
   postgres:
     image: postgres:16-alpine
@@ -27,8 +28,8 @@ services:
       # docker 内访问宿主机: llm-wiki daemon (本地 19828) 与 PG
       CRUCIBLE_WIKI_BASE: http://host.docker.internal:19828
       CRUCIBLE_DATABASE_URL: postgresql+asyncpg://crucible:${PG_PASSWORD:-crucible}@postgres:5432/crucible
-      # 项目数据目录 (宿主机路径挂载进容器)
-      CRUCIBLE_DATA_ROOT: /data
+      # docreader 服务 (P3)
+      CRUCIBLE_DOCREADER_BASE: http://docreader:8081
     ports:
       - "8080:8080"
     volumes:
@@ -40,5 +41,17 @@ services:
       postgres:
         condition: service_healthy
 
+  docreader:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.docreader
+    ports:
+      - "8081:8081"
+    volumes:
+      - mineru-models:/models
+    # 资源限制: MinerU 解析吃内存, 避免拖垮整个 Docker Desktop
+    mem_limit: 4g
+
 volumes:
   pg-data:
+  mineru-models:

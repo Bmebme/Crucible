@@ -15,6 +15,8 @@ from ..models import IngestionJob
 from .engines import get_rag
 
 ALLOWED_EXT = {".md", ".txt"}
+# 二进制格式: docreader 转换 (MinerU/markitdown) → md 后走同一双通道
+BINARY_EXT = {".pdf", ".docx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg"}
 
 WIKI_SUBDIR = {
     "verification": "verification",  # 验证记录模板 (frontmatter 带 verify_state)
@@ -29,27 +31,45 @@ async def ingest_document(
     subdir: str = "",
 ) -> dict:
     ext = Path(filename).suffix.lower()
-    if ext not in ALLOWED_EXT:
+    is_binary = ext in BINARY_EXT
+    if ext not in ALLOWED_EXT and not is_binary:
         return {
             "ok": False,
-            "error": f"格式 {ext} 暂不支持 (P3 MinerU 管线后支持 pdf/docx); 当前支持 {sorted(ALLOWED_EXT)}",
+            "error": f"格式 {ext} 不支持; 支持 {sorted(ALLOWED_EXT | BINARY_EXT)}",
         }
 
     # 1. 建任务
     async with session_scope() as s:
-        job = IngestionJob(project_id=project_id, filename=filename, kind=ext[1:], status="uploaded")
+        job = IngestionJob(
+            project_id=project_id, filename=filename,
+            kind=ext[1:], status="uploaded",
+        )
         s.add(job)
         await s.flush()
         job_id = job.id
 
     try:
+        # 1.5 二进制格式: docreader 转换 (MinerU/markitdown)
+        convert_engine = ""
+        if is_binary:
+            md_text, convert_engine = await _convert_via_docreader(filename, content)
+            if md_text is None:
+                await _update_job(job_id, status="failed", error="docreader 转换失败")
+                return {"ok": False, "job_id": job_id, "error": "docreader 转换失败"}
+            text = md_text
+            md_filename = str(Path(filename).with_suffix(".md"))
+            await _update_job(job_id, status="converted",
+                              detail={"engine": convert_engine})
+        else:
+            text = content.decode("utf-8", errors="replace")
+            md_filename = filename
+
         # 2. 通道 A: 原子写入 wiki 目录 (临时文件 + rename, 防 watcher 半写竞态)
         wiki_root = Path(project_path) / "wiki"
         target_dir = wiki_root / (WIKI_SUBDIR.get(subdir, "") or "")
         target_dir.mkdir(parents=True, exist_ok=True)
-        target = target_dir / filename
-        text = content.decode("utf-8", errors="replace")
-        fd, tmp = tempfile.mkstemp(dir=str(target_dir), suffix=ext)
+        target = target_dir / md_filename
+        fd, tmp = tempfile.mkstemp(dir=str(target_dir), suffix=".md")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(text)
@@ -58,13 +78,13 @@ async def ingest_document(
             if os.path.exists(tmp):
                 os.unlink(tmp)
             raise
-        wiki_path = str(Path("wiki") / (WIKI_SUBDIR.get(subdir, "") or "") / filename)
+        wiki_path = str(Path("wiki") / (WIKI_SUBDIR.get(subdir, "") or "") / md_filename)
 
         await _update_job(job_id, status="wiki_indexed", wiki_path=wiki_path)
 
         # 3. 通道 B: rag 摄入 (纯文本; source_name 写入 reference 列表供引用层锚定)
         rag = await get_rag(project_path)
-        ok = await rag.ingest(project_path, text, source_name=filename)
+        ok = await rag.ingest(project_path, text, source_name=md_filename)
         if not ok:
             await _update_job(
                 job_id, status="failed", error="rag 摄入失败 (引擎未就绪或 ainsert 失败)"
@@ -78,6 +98,31 @@ async def ingest_document(
     except Exception as e:
         await _update_job(job_id, status="failed", error=str(e))
         return {"ok": False, "job_id": job_id, "error": str(e)}
+
+
+async def _convert_via_docreader(
+    filename: str, content: bytes
+) -> tuple[str | None, str]:
+    """调 docreader 服务转换二进制文档。失败返回 (None, "")。"""
+    import httpx
+
+    from ..config import get_settings
+
+    base = get_settings().docreader_base
+    if not base:
+        return None, ""
+    try:
+        async with httpx.AsyncClient(timeout=960.0, trust_env=False) as c:
+            resp = await c.post(
+                f"{base}/parse",
+                files={"file": (filename, content)},
+            )
+            if resp.status_code != 200:
+                return None, ""
+            data = resp.json()
+        return data.get("markdown") or None, data.get("engine", "")
+    except Exception:
+        return None, ""
 
 
 async def _update_job(job_id: int, **fields) -> None:

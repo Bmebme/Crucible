@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import create_tables, init_db
-from .routers import documents, fusion, health, projects
+from .routers import documents, fusion, health, ledger, projects
 
 logging.basicConfig(
     level=logging.INFO,
@@ -81,6 +81,7 @@ app.include_router(health.router)
 app.include_router(fusion.router)
 app.include_router(projects.router)
 app.include_router(documents.router)
+app.include_router(ledger.router)
 
 # 前端静态资源 (P4 构建产物; 未构建时目录不存在, 忽略)
 _static = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
