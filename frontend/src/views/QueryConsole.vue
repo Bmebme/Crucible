@@ -85,7 +85,28 @@
         <span class="count">{{ result.results?.length ?? 0 }} 项</span>
       </template>
 
-      <div v-if="result.results?.length" class="results">
+      <!-- 枚举型: 分组清单 (Q1 答案形态 = 清单, 按类别折叠可读) -->
+      <div v-if="mode === 'enum' && result.results?.length">
+        <div class="enum-stats">
+          <el-tag type="info">共 {{ result.results.length }} 项</el-tag>
+          <el-tag type="warning">wiki {{ enumGroups.wikiCount }} 页</el-tag>
+          <el-tag type="success">rag {{ enumGroups.ragCount }} 实体</el-tag>
+          <span class="hint">Q1 枚举型的答案是清单 (KB 枚举, Agent 选择) — 需要成段综述可切「融合查询」</span>
+        </div>
+        <el-collapse v-model="enumOpen" class="enum-collapse">
+          <el-collapse-item v-for="(items, key) in enumGroups.groups" :key="key" :name="key">
+            <template #title>
+              <b>{{ enumGroupLabel(key) }}</b>
+              <span class="enum-count">{{ items.length }}</span>
+            </template>
+            <div class="enum-items">
+              <el-tag v-for="(r, i) in items" :key="i" size="small" class="enum-tag">{{ r.name }}</el-tag>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+
+      <div v-else-if="result.results?.length" class="results">
         <div v-for="(r, i) in result.results" :key="i" class="result-item">
           <div class="ri-head">
             <span class="ri-name">{{ r.title || r.name || r.conclusion?.slice(0, 60) || '结论' }}</span>
@@ -164,6 +185,37 @@ const pagePath = ref('')
 const pageContent = ref('')
 const prediction = ref<any>(null)
 let predictTimer: any = null
+const enumOpen = ref<string[]>([])
+const enumGroups = ref<{ groups: Record<string, any[]>; wikiCount: number; ragCount: number }>({
+  groups: {}, wikiCount: 0, ragCount: 0,
+})
+
+function buildEnumGroups(results: any[]) {
+  const groups: Record<string, any[]> = {}
+  let wikiCount = 0, ragCount = 0
+  for (const r of results) {
+    const n = r.name || ''
+    let key: string
+    if (n.startsWith('wiki/')) {
+      key = 'wiki:' + (n.slice(5).split('/')[0] || '其他')
+      wikiCount++
+    } else {
+      key = 'rag:实体'
+      ragCount++
+    }
+    ;(groups[key] ||= []).push(r)
+  }
+  enumGroups.value = { groups, wikiCount, ragCount }
+  enumOpen.value = Object.keys(groups)
+}
+
+function enumGroupLabel(key: string) {
+  const labels: Record<string, string> = {
+    'wiki:concepts': '概念页', 'wiki:entities': '实体页', 'wiki:queries': '查询页',
+    'wiki:sources': '源文档', 'wiki:verification': '验证记录', 'rag:实体': 'LightRAG 实体',
+  }
+  return labels[key] ?? key
+}
 
 function typeLabel(t: string) {
   return { Q1: '枚举型·全', Q2: '机制型·准', Q3: '经验型·可信' }[t] ?? ''
@@ -231,6 +283,7 @@ async function run() {
     else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value })
     result.value = data
     notes.value = data.notes ?? []
+    if (mode.value === 'enum') buildEnumGroups(data.results ?? [])
     if (data.differences?.length) ElMessage.success(`结果 ${data.results?.length ?? 0} 项, 差异 ${data.differences.length} 项`)
   } catch (e: any) {
     ElMessage.error('查询失败: ' + (e?.response?.data?.detail ?? e?.message ?? e))
@@ -266,4 +319,12 @@ async function run() {
 }
 .page-content { white-space: pre-wrap; font-size: 13px; line-height: 1.7; }
 .conflict { margin-bottom: 8px; }
+</style>
+
+<style scoped>
+.enum-stats { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.enum-collapse { border: none; }
+.enum-count { margin-left: 8px; color: #909399; font-size: 12px; }
+.enum-items { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 8px; }
+.enum-tag { cursor: default; }
 </style>

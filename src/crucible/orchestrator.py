@@ -78,11 +78,26 @@ class FusionOrchestrator:
         return resp
 
     async def _run_enum(self, query: str, resp: FusionResponse) -> None:
-        """Q1: 双引擎枚举 → M1 并集合并 (含 L2/L3 名字对齐, §5.5)。"""
-        wiki_pages, rag_entities = await asyncio.gather(
-            self.wiki.list_pages(self.project_id),
+        """Q1: 双引擎枚举 → M1 并集合并 (含 L2/L3 名字对齐, §5.5)。
+
+        wiki 通道按 hint 检索相关页 (Q1 的「全」= 全部相关, 不是全库清单;
+        list_pages 全量只作检索失败时的降级)。
+        """
+        wiki_hits, rag_entities = await asyncio.gather(
+            self.wiki.search(self.project_id, f"{query} 有哪些", limit=100),
             self.rag.enumerate_entities(self.project_path, query),
         )
+        wiki_pages = []
+        for h in wiki_hits:
+            if not h.path:
+                continue
+            rel = h.path[:-3] if h.path.endswith(".md") else h.path
+            if rel in ("wiki/index", "wiki/log", "wiki/overview"):
+                continue  # 导航页不是知识实体
+            wiki_pages.append(h.path)
+        if not wiki_pages:
+            # 降级: 检索无结果时退全量清单 (保住召回)
+            wiki_pages = await self.wiki.list_pages(self.project_id)
         rag_names = [e.name for e in rag_entities]
         mode = self.config.alias_mode
 
