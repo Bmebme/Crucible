@@ -81,6 +81,14 @@ def classify_by_rules(query: str) -> IntentConfig | None:
     return None
 
 
+def matched_rule(query: str) -> str | None:
+    """命中的规则正则 (分类可解释性: 前端展示「为什么判成这类」)。"""
+    for pattern, _qtype in _RULES:
+        if pattern.search(query):
+            return pattern.pattern
+    return None
+
+
 async def classify_by_llm(query: str, config: Config) -> IntentConfig | None:
     """LLM 兜底分类。失败时返回 None (由上层走保守策略)。"""
     if not config.llm_api_key:

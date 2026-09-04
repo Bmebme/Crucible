@@ -1,5 +1,5 @@
 """判别器规则层单测 (纯函数, 无网络)。"""
-from crucible.classifier import classify_by_rules, merge_mode
+from crucible.classifier import classify_by_rules, matched_rule, merge_mode
 from crucible.schemas import QueryType
 
 
@@ -105,3 +105,9 @@ def test_experience_weak_rule_after_mechanism():
     # 「如何验证」: 机制信号优先 → Q2
     result2 = classify_by_rules("如何验证接口")
     assert result2 is not None and result2.query_type == QueryType.MECHANISM
+
+
+def test_matched_rule():
+    assert matched_rule("有哪些组件") == r"哪些|有哪些|类型|清单|列举|列出|全部|多少(个|种|类)?"
+    assert matched_rule("上传验证") == r"验证|验证记录|实测记录|误报"
+    assert matched_rule("完全无关的一句话") is None

@@ -45,7 +45,7 @@ def _prefer_offline_hub() -> None:
         pass
 
 from ..config import Config
-from ..schemas import RagEntity
+from ..schemas import Citation, RagEntity, RagChunk
 
 _ENTITY_LINE_RE = re.compile(
     r'\{"entity"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"'
@@ -81,6 +81,38 @@ def _is_noise(name: str) -> bool:
     if name.lower() in _NOISE_NAMES:
         return True
     return any(r.search(name) for r in _NOISE_RES)
+
+
+def parse_context_chunks(raw: str) -> list["RagChunk"]:
+    """从 only_need_context 的上下文里解析 Document Chunks (原文引用单元)。
+
+    LightRAG 每个 chunk 是独立一行 JSON; 按行解析, 失败行跳过。
+    """
+    chunks: list[RagChunk] = []
+    seen: set[str] = set()
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line.startswith('{"reference_id"'):
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        content = str(obj.get("content", ""))
+        if not content:
+            continue
+        key = str(obj.get("reference_id", "")) + content[:64]
+        if key in seen:
+            continue
+        seen.add(key)
+        chunks.append(
+            RagChunk(
+                reference_id=str(obj.get("reference_id", "")),
+                content=content,
+                headings=str(obj.get("content_headings", "")),
+            )
+        )
+    return chunks
 
 
 class RagEngine:
@@ -191,17 +223,44 @@ class RagEngine:
         try:
             result = await self._rag.aquery(
                 text,
-                param=self._QueryParam(mode=mode, enable_rerank=False),
+                param=self._QueryParam(
+                    mode=mode, enable_rerank=False, include_references=True
+                ),
             )
             return str(result)
         except Exception:
             return ""
 
-    async def ingest(self, project_path: str, text: str) -> bool:
+    async def query_context(
+        self, project_path: str, text: str, mode: str = "hybrid", top_k: int = 3
+    ) -> list[RagChunk]:
+        """检索上下文 (引用层): 纯检索无 LLM 生成, 取 chunk 原文作引用。"""
+        if not await self.ensure_ready(project_path):
+            return []
+        try:
+            raw = await self._rag.aquery(
+                text,
+                param=self._QueryParam(
+                    mode=mode,
+                    only_need_context=True,
+                    enable_rerank=False,
+                    top_k=top_k,
+                ),
+            )
+        except Exception:
+            return []
+        return parse_context_chunks(str(raw))
+
+    async def ingest(
+        self, project_path: str, text: str, source_name: str = ""
+    ) -> bool:
+        """摄入。source_name 会写入 reference 列表 (引用层路径锚点)。"""
         if not await self.ensure_ready(project_path):
             return False
         try:
-            await self._rag.ainsert(text)
+            await self._rag.ainsert(
+                text, file_paths=[source_name] if source_name else None
+            )
             return True
         except Exception:
             return False

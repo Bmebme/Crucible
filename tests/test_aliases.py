@@ -68,3 +68,56 @@ def test_candidate_pairs_surface_heuristics():
     assert not any(
         "a610" in a for a, _ in pairs
     )
+
+
+"""引用层单测 (纯函数)。"""
+from crucible.engines.rag_engine import parse_context_chunks
+from crucible.schemas import Citation
+
+
+def test_parse_context_chunks():
+    raw = '''Knowledge Graph Data (Entity):
+
+```json
+{"entity": "x", "type": "concept"}
+```
+
+Document Chunks:
+
+```json
+{"reference_id": "doc-a-chunk-001", "content": "第一段原文: JWT 认证链路", "content_headings": "第3章 → 鉴权"}
+{"reference_id": "doc-a-chunk-002", "content": "第二段原文"}
+```
+'''
+    chunks = parse_context_chunks(raw)
+    assert len(chunks) == 2
+    assert chunks[0].reference_id == "doc-a-chunk-001"
+    assert chunks[0].headings == "第3章 → 鉴权"
+    assert "JWT" in chunks[0].content
+
+
+def test_parse_context_chunks_skips_junk():
+    raw = '''{"reference_id": "", "content": ""}
+not a json line
+{"reference_id": "ok", "content": "有效原文"}
+'''
+    chunks = parse_context_chunks(raw)
+    assert len(chunks) == 1
+    assert chunks[0].content == "有效原文"
+
+
+def test_citation_to_dict():
+    c = Citation(source="wiki", path="wiki/entities/fm-api-gateway", excerpt="JWT 认证")
+    d = c.to_dict()
+    assert d["source"] == "wiki" and d["path"] == "wiki/entities/fm-api-gateway"
+    assert d["chunk_id"] == "" and d["heading_path"] == ""
+
+
+def test_find_heading():
+    from crucible.engines.wiki_engine import find_heading
+
+    content = "# 页面标题\n\n## 第一节\n\n内容A\n\n## 第二节\n\n内容B提到鉴权。\n"
+    assert find_heading(content, "内容A") == "第一节"
+    assert find_heading(content, "鉴权") == "第二节"
+    assert find_heading(content, "不存在的片段") == ""
+    assert find_heading("", "x") == ""

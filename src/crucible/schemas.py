@@ -34,6 +34,33 @@ class IntentConfig:
 
 
 @dataclass
+class Citation:
+    """文段级引用 (引用层 P2): 结果 → 原文锚点。
+
+    source: "wiki" (页面) | "rag" (检索上下文 chunk)
+    path:   wiki 页面路径 / rag 源文档路径 (可空)
+    chunk_id: rag chunk 的 reference_id (可空)
+    heading_path: 章节标题路径 (可空)
+    excerpt: 原文摘录 —— 评估/审计的对照基准
+    """
+
+    source: str
+    path: str = ""
+    chunk_id: str = ""
+    heading_path: str = ""
+    excerpt: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source": self.source,
+            "path": self.path,
+            "chunk_id": self.chunk_id,
+            "heading_path": self.heading_path,
+            "excerpt": self.excerpt,
+        }
+
+
+@dataclass
 class WikiHit:
     """llm_wiki 页面引擎的一个召回命中。"""
 
@@ -43,6 +70,7 @@ class WikiHit:
     snippet: str = ""
     verify_state: str | None = None   # M3 加权字段 (frontmatter)
     source: str = ""                 # 溯源
+    citations: list[Citation] = field(default_factory=list)  # 引用层
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -53,7 +81,17 @@ class WikiHit:
             "snippet": self.snippet,
             "verify_state": self.verify_state,
             "source": self.source,
+            "citations": [c.to_dict() for c in self.citations],
         }
+
+
+@dataclass
+class RagChunk:
+    """LightRAG 检索上下文中的一个原文 chunk (引用层)。"""
+
+    reference_id: str = ""
+    content: str = ""
+    headings: str = ""
 
 
 @dataclass

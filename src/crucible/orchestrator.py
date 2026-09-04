@@ -17,7 +17,8 @@ from .merge import m2_consistency
 from .merge.aliases import candidate_pairs, load_alias_dict, resolve_llm_pairs
 from .merge.m1_union import normalize_name, union_merge
 from .merge.m3_state import sort_by_verify_state
-from .schemas import FusionResponse, QueryType, WikiHit
+from .engines.wiki_engine import find_heading
+from .schemas import Citation, FusionResponse, QueryType, WikiHit
 
 
 class FusionOrchestrator:
@@ -78,11 +79,26 @@ class FusionOrchestrator:
         return resp
 
     async def _run_enum(self, query: str, resp: FusionResponse) -> None:
-        """Q1: 双引擎枚举 → M1 并集合并 (含 L2/L3 名字对齐, §5.5)。"""
-        wiki_pages, rag_entities = await asyncio.gather(
-            self.wiki.list_pages(self.project_id),
+        """Q1: 双引擎枚举 → M1 并集合并 (含 L2/L3 名字对齐, §5.5)。
+
+        wiki 通道按 hint 检索相关页 (Q1 的「全」= 全部相关, 不是全库清单;
+        list_pages 全量只作检索失败时的降级)。
+        """
+        wiki_hits, rag_entities = await asyncio.gather(
+            self.wiki.search(self.project_id, f"{query} 有哪些", limit=100),
             self.rag.enumerate_entities(self.project_path, query),
         )
+        wiki_pages = []
+        for h in wiki_hits:
+            if not h.path:
+                continue
+            rel = h.path[:-3] if h.path.endswith(".md") else h.path
+            if rel in ("wiki/index", "wiki/log", "wiki/overview"):
+                continue  # 导航页不是知识实体
+            wiki_pages.append(h.path)
+        if not wiki_pages:
+            # 降级: 检索无结果时退全量清单 (保住召回)
+            wiki_pages = await self.wiki.list_pages(self.project_id)
         rag_names = [e.name for e in rag_entities]
         mode = self.config.alias_mode
 
@@ -117,10 +133,19 @@ class FusionOrchestrator:
         merged = union_merge(
             wiki_pages, rag_names, aliases=alias_dict, llm_same=llm_same or None
         )
-        resp.results = [
-            {"kind": "item", "name": name, "provenance": ["union"]}
-            for name in merged.union
-        ]
+        # 枚举条目携带简介: wiki 侧带检索 snippet, rag 侧带实体 description
+        # (Agent 的「目录」要有书名+一句话简介, 不能只有裸名字)
+        wiki_meta = {h.path: (h.title, h.snippet) for h in wiki_hits if h.path}
+        rag_meta = {e.name: (e.entity_type, e.description) for e in rag_entities}
+        resp.results = []
+        for name in merged.union:
+            item: dict[str, Any] = {"kind": "item", "name": name, "provenance": ["union"]}
+            if name in wiki_meta:
+                item["snippet"] = wiki_meta[name][1]
+            elif name in rag_meta:
+                item["entity_type"] = rag_meta[name][0]
+                item["description"] = rag_meta[name][1]
+            resp.results.append(item)
         resp.differences = merged.differences
         resp.notes.append(
             f"union={len(merged.union)} wiki={len(merged.wiki_items)} "
@@ -164,12 +189,34 @@ class FusionOrchestrator:
         resp.notes.append(f"verified_weighted={len(resp.results)}")
 
     async def _run_mechanism(self, query: str, resp: FusionResponse) -> None:
-        """Q2: 双引擎召回 → M2 一致性比对 (LLM 只比对不重写)。"""
-        wiki_hits, rag_answer = await asyncio.gather(
+        """Q2: 双引擎召回 → M2 一致性比对 (LLM 只比对不重写) + 引用层接地。"""
+        wiki_hits, rag_answer, rag_context = await asyncio.gather(
             self.wiki.search(self.project_id, query, limit=3),
             self.rag.query(self.project_path, query, mode="hybrid"),
+            self.rag.query_context(self.project_path, query, mode="hybrid"),
         )
+        # 引用层: wiki 命中自带引用; rag 侧从检索上下文 chunk 摘原文
+        rag_citations = [
+            Citation(
+                source="rag",
+                chunk_id=c.reference_id,
+                heading_path=c.headings,
+                excerpt=c.content[:400],
+            )
+            for c in rag_context[:3]
+        ]
         wiki_top = wiki_hits[0] if wiki_hits else None
+        # 引用段落级定位: 拉整页原文, 给 wiki 顶部引用补 heading_path
+        if wiki_top and wiki_top.citations:
+            try:
+                content = await self.wiki.read_page_content(
+                    self.project_id, wiki_top.path
+                )
+                heading = find_heading(content, wiki_top.snippet)
+                if heading:
+                    wiki_top.citations[0].heading_path = heading
+            except Exception:
+                pass
         if wiki_top is None and not rag_answer:
             resp.notes.append("两引擎均无召回")
             return
@@ -186,11 +233,28 @@ class FusionOrchestrator:
             if wiki_top:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
             if rag_answer:
-                resp.results.append({"kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300], "provenance": ["rag"], "confidence": "degraded"})
+                resp.results.append({
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                    "provenance": ["rag"], "confidence": "degraded",
+                    "citations": [c.to_dict() for c in rag_citations],
+                })
             resp.notes.append("M2 降级: LLM 不可用, 单源并列输出")
             return
 
+        all_citations = (wiki_top.citations if wiki_top else []) + rag_citations
         if compared.get("consistent"):
+            # 强制接地: 无引用不输出合并结论 (宁缺毋滥, 守 faithfulness)
+            if not all_citations:
+                resp.notes.append("M2 合并结论无引用支撑, 降级为并列输出")
+                if wiki_top:
+                    resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
+                if rag_answer:
+                    resp.results.append({
+                        "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                        "provenance": ["rag"], "confidence": "degraded",
+                        "citations": [c.to_dict() for c in rag_citations],
+                    })
+                return
             resp.results.append(
                 {
                     "kind": "conclusion",
@@ -198,6 +262,7 @@ class FusionOrchestrator:
                     "evidence": compared.get("evidence"),
                     "confidence": "high",
                     "provenance": ["wiki", "rag", "M2"],
+                    "citations": [c.to_dict() for c in all_citations],
                 }
             )
         else:
@@ -205,5 +270,9 @@ class FusionOrchestrator:
             if wiki_top:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"]})
             if rag_answer:
-                resp.results.append({"kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300], "provenance": ["rag"]})
+                resp.results.append({
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                    "provenance": ["rag"],
+                    "citations": [c.to_dict() for c in rag_citations],
+                })
             resp.notes.append("冲突对峙输出: 不裁决, 由 Agent/人裁决后回写")

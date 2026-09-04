@@ -12,9 +12,22 @@ from typing import Any
 
 import httpx
 
-from ..schemas import WikiHit
+from ..schemas import Citation, WikiHit
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
+
+
+def find_heading(content: str, snippet: str) -> str:
+    """在整页原文里定位 snippet 所属的最近标题 (引用段落级锚点, 任务 8)。"""
+    if not content or not snippet:
+        return ""
+    probe = " ".join(snippet.split())[:60]
+    idx = content.find(probe)
+    if idx < 0:
+        return ""
+    matches = list(_HEADING_RE.finditer(content[:idx]))
+    return matches[-1].group(2).strip() if matches else ""
 
 # wiki 后端是 localhost 服务: 禁止 httpx 读取环境代理 (trust_env),
 # 否则 HTTP_PROXY 等环境变量会把本机流量劫持到代理导致超时。
@@ -36,16 +49,38 @@ class WikiEngine:
             return []
         hits: list[WikiHit] = []
         for r in data.get("results") or []:
+            path = r.get("path", "")
+            snippet = (r.get("snippet") or "")[:200]
             hits.append(
                 WikiHit(
-                    title=r.get("title") or r.get("path", ""),
-                    path=r.get("path", ""),
+                    title=r.get("title") or path,
+                    path=path,
                     score=float(r.get("score") or 0),
-                    snippet=(r.get("snippet") or "")[:200],
+                    snippet=snippet,
                     source=r.get("source", ""),
+                    # 引用层: wiki 页面即原文, path 即指针 (excerpt=snippet 定位)
+                    citations=[Citation(source="wiki", path=path, excerpt=snippet)]
+                    if path
+                    else [],
                 )
             )
         return hits
+
+    async def read_page_content(self, project_id: str, path: str) -> str:
+        """整页原文 (引用层: 跳转原文用)。失败返回空串。"""
+        try:
+            async with httpx.AsyncClient(**_CLIENT_KW) as client:
+                resp = await client.get(
+                    f"{self.base_url}/api/v1/projects/{project_id}/files/content",
+                    params={"path": path},
+                )
+                if resp.status_code != 200:
+                    return ""
+                data = resp.json()
+        except Exception:
+            return ""
+        content = data.get("content", "")
+        return content if isinstance(content, str) else ""
 
     async def list_pages(self, project_id: str) -> list[str]:
         """wiki/ 下全部页面相对路径 (不含 .md)。
