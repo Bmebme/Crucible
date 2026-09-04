@@ -113,3 +113,8 @@ docs/             设计文档 + 决策记录 + 工程计划 + 部署指南 + �
 > 多产品建项必读: llm-wiki 项目目录必须含 schema.md (页面类型约定),
 > 否则 open project 报 "Not a valid wiki project (missing schema.md)"。
 > 新项目从现有项目复制 schema.md 即可。
+
+> ⚠️ 桥接键陷阱: 注册 crucible 项目时 wiki_project_id 必须用 llm-wiki
+> `/api/v1/projects` 返回的**稳定 id** (uuid), 不要用 "current" ——
+> "current" 是动态别名, 指向 llm-wiki 当前打开的项目, 会随打开动作漂移,
+> 导致跨项目数据串库 (实测踩坑)。
