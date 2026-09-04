@@ -53,54 +53,12 @@ async def _upload_verification(
 
 
 def _format_enum(data: dict, category: str = "", full: bool = False) -> str:
-    """枚举结果 → 紧凑文本 (Agent 上下文友好)。
+    import sys as _sys
 
-    结构: 总数/构成 → 分组条目 (每类截断) → 差异摘要 → 拉全指引。
-    category 指定只列某类 (concepts/entities/queries/sources/verification/rag);
-    full=True 时该类别不截断。
-    """
-    results = data.get("results", [])
-    groups: dict[str, list[str]] = {}
-    for r in results:
-        n = str(r.get("name", ""))
-        if n.startswith("wiki/"):
-            seg = n[5:].split("/")[0]
-            groups.setdefault(f"wiki:{seg}", []).append(n)
-        else:
-            groups.setdefault("rag", []).append(n)
-    for k in groups:
-        groups[k].sort()
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from app.services.formatting import format_enum_compact
 
-    diff_wiki = [d["item"] for d in data.get("differences", []) if d.get("only_in") == "wiki"]
-    diff_rag = [d["item"] for d in data.get("differences", []) if d.get("only_in") == "rag"]
-    alias_notes = [n for n in data.get("notes", []) if n.startswith("alias:")]
-
-    label = {"wiki:concepts": "概念页", "wiki:entities": "实体页", "wiki:queries": "查询页",
-             "wiki:sources": "源文档", "wiki:verification": "验证记录", "rag": "LightRAG 实体"}
-
-    lines: list[str] = []
-    if category:
-        key = f"wiki:{category}" if category != "rag" else "rag"
-        items = groups.get(key, [])
-        cap = len(items) if full else 30
-        shown, rest = items[:cap], items[cap:]
-        lines.append(f"【{label.get(key, key)}】{len(items)} 项" + ("（完整）" if not rest else f"（显示前 {cap}，余 {len(rest)} 项用 full=true 拉全）"))
-        lines.extend(f"- {i}" for i in shown)
-    else:
-        lines.append(f"【枚举】共 {len(results)} 项: wiki {sum(len(v) for k, v in groups.items() if k != 'rag')} 页 + rag {len(groups.get('rag', []))} 实体")
-        for key in ("wiki:concepts", "wiki:entities", "wiki:verification", "wiki:sources", "wiki:queries", "rag"):
-            if key not in groups:
-                continue
-            items = groups[key]
-            cap = 15
-            shown, rest = items[:cap], items[cap:]
-            lines.append(f"- {label.get(key, key)} ({len(items)}): {', '.join(shown)}" + (f" …余 {len(rest)}" if rest else ""))
-        lines.append("完整清单: 用 category 参数指定类别 (concepts/entities/queries/sources/verification/rag) 逐类拉取")
-    if diff_wiki or diff_rag:
-        lines.append(f"差异: wiki 侧缺 {len(diff_rag)} / rag 侧缺 {len(diff_wiki)} (知识缺口, 需处理时拉差异清单)")
-    if alias_notes:
-        lines.append(f"名字对齐: {len(alias_notes)} 条命中")
-    return "\n".join(lines)
+    return format_enum_compact(data, category=category, full=full)
 
 
 def _format_experience(data: dict) -> str:

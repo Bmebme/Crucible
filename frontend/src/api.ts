@@ -18,8 +18,8 @@ export async function fusionQuery(req: QueryRequest) {
   return data
 }
 
-export async function fusionEnum(hint: string, project_id: string, alias_mode?: string) {
-  const { data } = await api.post('/fusion/enum', { hint, project_id, alias_mode })
+export async function fusionEnum(hint: string, project_id: string, alias_mode?: string, summarize = true) {
+  const { data } = await api.post('/fusion/enum', { hint, project_id, alias_mode, summarize })
   return data
 }
 

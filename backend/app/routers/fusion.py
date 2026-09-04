@@ -25,6 +25,7 @@ class EnumRequest(BaseModel):
     hint: str
     project_id: str = "current"
     alias_mode: str | None = None
+    summarize: bool = False  # LLM 导读 (文字化回答; 清单仍是权威本体)
 
 
 class ExperienceRequest(BaseModel):
@@ -139,6 +140,17 @@ async def fusion_enum(req: EnumRequest) -> dict:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"fusion error: {e}") from e
     data = resp.to_dict()
+    if req.summarize:
+        try:
+            from ..config import get_settings
+            from ..services.formatting import summarize_enum
+
+            s = get_settings()
+            data["summary"] = await summarize_enum(
+                req.hint, data, s.llm_base, s.llm_api_key, s.llm_model,
+            )
+        except Exception:
+            data["summary"] = ""  # 导读失败降级为纯清单
     await _log_query(
         req.project_id, f"enum:{req.hint}", "Q1", orch.config.alias_mode, "",
         (time.monotonic() - t0) * 1000, "enum",
