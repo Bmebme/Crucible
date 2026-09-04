@@ -38,6 +38,22 @@
         </template>
       </el-input>
 
+      <div v-if="prediction" class="predict-row">
+        <span class="hint">类型预判：</span>
+        <el-tag size="large" :type="qtypeColor(prediction.query_type)" effect="dark">
+          {{ prediction.query_type }} {{ typeLabel(prediction.query_type) }}
+        </el-tag>
+        <el-tag size="small" type="info">合并 {{ prediction.merge_mode }}</el-tag>
+        <el-tag size="small" type="info" v-if="prediction.rewritten_to" class="predict-rewrite">
+          追问已消解: {{ prediction.rewritten_to }}
+        </el-tag>
+        <span class="hint">
+          {{ prediction.matched_by?.startsWith('rule')
+            ? '命中规则: ' + prediction.matched_by.slice(5)
+            : prediction.matched_by === 'llm' ? 'LLM 判定' : '保守兜底' }}
+        </span>
+      </div>
+
       <div class="history-row">
         <span class="hint">多轮历史（追问时用于指代消解，每行一条，最早在前）：</span>
         <el-input
@@ -129,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api, fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
 
@@ -146,6 +162,28 @@ const notes = ref<string[]>([])
 const drawer = ref(false)
 const pagePath = ref('')
 const pageContent = ref('')
+const prediction = ref<any>(null)
+let predictTimer: any = null
+
+function typeLabel(t: string) {
+  return { Q1: '枚举型·全', Q2: '机制型·准', Q3: '经验型·可信' }[t] ?? ''
+}
+
+// 输入即预判 (600ms 防抖, 只分类不检索)
+watch(query, (v) => {
+  clearTimeout(predictTimer)
+  const q = v.trim()
+  if (!q) { prediction.value = null; return }
+  predictTimer = setTimeout(async () => {
+    try {
+      const { data } = await api.post('/fusion/classify', {
+        query: q, project_id: projectId.value,
+        history: historyText.value.split('\n').map((s) => s.trim()).filter(Boolean),
+      })
+      prediction.value = data
+    } catch { prediction.value = null }
+  }, 600)
+})
 
 async function openPage(path: string) {
   pagePath.value = path
@@ -204,6 +242,8 @@ async function run() {
 
 <style scoped>
 .query-card { margin-bottom: 16px; }
+.predict-row { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.predict-rewrite { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
 .history-row { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .hint { font-size: 12px; color: #909399; }
 .notes { display: flex; flex-wrap: wrap; gap: 6px; }

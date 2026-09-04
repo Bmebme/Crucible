@@ -54,6 +54,42 @@ async def _log_query(project_id: str, query: str, qtype: str, alias_mode: str,
         pass  # 审计失败不影响查询
 
 
+@router.post("/classify")
+async def fusion_classify(req: QueryRequest) -> dict:
+    """问题类型预判 (独立端点): 只分类不检索, 供前端实时徽章/MCP 用。"""
+    from crucible.classifier import (
+        classify as _classify,
+        matched_rule as _matched_rule,
+        merge_mode as _merge_mode,
+        rewrite_if_needed as _rewrite,
+    )
+
+    from ..config import get_settings
+
+    cfg = get_settings()
+    # 多轮追问先消解再分类 (与 orchestrator 同约定)
+    resolved = await _rewrite(req.query, req.history or None, _core_cfg(cfg))
+    ruled = _matched_rule(resolved)
+    intent = await _classify(resolved, _core_cfg(cfg))
+    return {
+        "query": req.query,
+        "rewritten_to": resolved if resolved != req.query else "",
+        "query_type": intent.query_type.value,
+        "confidence": intent.confidence,
+        "merge_mode": _merge_mode(intent.query_type),
+        "channels": intent.channels,
+        "matched_by": f"rule:{ruled}" if ruled else ("llm" if intent.confidence >= 0.7 else "fallback"),
+    }
+
+
+def _core_cfg(s) -> object:
+    from crucible.config import Config as CoreConfig
+
+    return CoreConfig(
+        llm_base=s.llm_base, llm_api_key=s.llm_api_key, llm_model=s.llm_model,
+    )
+
+
 @router.post("/query")
 async def fusion_query(req: QueryRequest) -> dict:
     t0 = time.monotonic()
