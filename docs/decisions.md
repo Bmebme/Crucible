@@ -101,7 +101,10 @@ wiki API 契约变化 → 只动 `wiki_engine.py`。
 
 **决策**：归一化到"最后一节、NFKC、小写、空白折叠"后比对；同名命中合并，
 差异按来源标注并附回填建议（wiki 侧缺失 → "回填 wiki 清单页"，rag 侧缺失 →
-"检查 rag 抽取为何遗漏"）。
+"检查 rag 抽取为何遗漏"）。wiki 通道按 hint **检索相关页**而非全量清单
+(实测: 全量清单让"外部接口"并集=190 项全库倾倒; 检索后 wiki 侧收窄到
+相关 20 页), 过滤 index/log/overview 导航页, 检索无结果才退全量降级。
+条目携带简介 (wiki snippet / rag description), 引用段落级定位见 D-06 附注。
 
 **实现**：`src/crucible/merge/m1_union.py`
 - `normalize_name()` — 去 .md、去路径前缀（rsplit "/"）、NFKC、lower、空白折叠
@@ -130,6 +133,10 @@ rag 取 hybrid 回答前 600 字喂比对）。
 **调整**：比对 prompt → 改 m2_consistency 里的 prompt；召回条数 → 改
 `_run_mechanism` 里 `wiki.search(limit=3)`；冲突处理策略（比如自动裁决）→
 改 `_run_mechanism` 的 else 分支。
+
+**引用段落定位**：wiki 顶部引用自动补 `heading_path`
+(`wiki_engine.find_heading`: 在整页原文中定位 snippet 最近标题),
+调整锚点粒度改该函数。
 
 ---
 
@@ -279,3 +286,41 @@ provenance，differences/conflicts 并列呈现由上层裁决。
 HF_ENDPOINT 预设。
 
 **调整**：内网 LightRAG demo 上线 → 替换 `rag_engine.py` 实现，配置项不变。
+
+## D-14 多产品软隔离: related_projects 联邦检索
+
+**背景**：多产品各自独立索引 (硬隔离), 但产品间存在关联场景 (如基站与网管
+MAE)。完全隔离时关联知识不可见; 完全融合则污染主结果。
+
+**决策**：声明式软隔离 —— 注册时人工声明 `related_projects`; 查询可选
+`include_related` → 主项目全量检索 (全权重), 每个关联项目低量检索
+(结果截断, **权重 0.1**), 进响应 `related_hits` 参考区, **永不进 M1/M2/M3
+合并**。只追一级关联, 不递归。自动相似度关联不做 (引入失真层, 声明式才可控)。
+
+**实现**：`backend/app/models.py` `Project.related_projects` (JSON);
+`backend/app/routers/fusion.py` `_related_hits` (权重 0.1); 前端
+QueryConsole 折叠参考区; MCP `kb_enum/kb_mechanism` 的 `related` 参数 (默认关)。
+
+**调整**：改权重 → fusion.py `_related_hits` 的 `weight`; 改截断条数 →
+`resp.results[:10]` (enum) / `[:5]` (query); 改是否递归 → 循环结构。
+
+## D-15 多产品桥接与数据隔离约定
+
+**背景**：llm-wiki 与 crucible 是两个系统, 靠 `wiki_project_id` 桥接。
+实测两个坑: ① "current" 是 llm-wiki 的动态别名 (指向当前打开项目),
+用它桥接会随打开动作漂移导致**跨项目串库**; ② llm-wiki 项目目录必须含
+`schema.md` 否则 open project 拒绝。
+
+**决策**：
+- crucible 注册的 `wiki_project_id` 必须用 llm-wiki `/api/v1/projects`
+  返回的**稳定 uuid**, 禁用 "current"
+- 新产品建项：llm-wiki 建项目 (目录带 schema.md) → 拿 uuid → crucible 注册
+  (path 指向同一宿主机目录的容器内路径, rag_workdir 独立)
+- 数据共享：llm-wiki 与 crucible 挂载同一宿主机目录 (两扇窗口, 零复制);
+  docreader 不挂数据, 只走 HTTP
+
+**实现**：约定为主, 无强制校验 (后续可加: 注册时校验 uuid 格式并警告
+"current")。
+
+**调整**：校验逻辑加在 `backend/app/routers/projects.py` create_project;
+schema.md 检查属 llm-wiki 侧 (py-llm-wiki 仓库)。
