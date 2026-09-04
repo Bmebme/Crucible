@@ -1,15 +1,24 @@
 # DocReader: 二进制文档 → Markdown (MinerU 优先, markitdown 兜底)
+#
+# 实测安装配方 (2026-09-04):
+#   - aliyun 镜像的 torch wheel 校验和不符 → torch 固定走 tuna
+#   - aliyun 大包下载偶发 ReadTimeout → --retries 8 --timeout 120
+#   - mineru 模型运行时从 ModelScope 下载, 缓存于 /models volume
 FROM python:3.12-slim
 
-# 国内镜像 (aliyun: mineru/markitdown 都在; tuna 没有这两个包)
 ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 libgl1 libglib2.0-0 curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir fastapi uvicorn python-multipart markitdown \
-    && pip install --no-cache-dir "mineru[core]" || echo "mineru install failed, markitdown-only"
+# 先装轻依赖 (aliyun); torch 单独走 tuna (aliyun 的 torch 坏包)
+RUN pip install --no-cache-dir --timeout 120 --retries 8 \
+        fastapi uvicorn python-multipart markitdown \
+    && pip install --no-cache-dir --timeout 120 --retries 8 \
+        --index-url https://pypi.tuna.tsinghua.edu.cn/simple "torch==2.14.0" \
+    && pip install --no-cache-dir --timeout 120 --retries 8 "mineru[core]" \
+    || echo "mineru install failed, markitdown-only"
 
 WORKDIR /srv
 COPY docreader/app ./app

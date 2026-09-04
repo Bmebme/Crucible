@@ -42,15 +42,17 @@ services:
         condition: service_healthy
 
   docreader:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.docreader
+    # 模型已烧入镜像 (docker commit 自实测通过的容器), Dockerfile 配方见
+    # deploy/Dockerfile.docreader (torch 走 tuna / 模型 HF 镜像源)
+    image: deploy-docreader:with-models
+    environment:
+      MINERU_MODEL_SOURCE: huggingface
+      HF_ENDPOINT: https://hf-mirror.com
+      HF_HUB_OFFLINE: "1"   # 模型已烧入镜像缓存, 关闭在线探测
     ports:
       - "8081:8081"
-    volumes:
-      - mineru-models:/models
-    # 资源限制: MinerU 解析吃内存, 避免拖垮整个 Docker Desktop
-    mem_limit: 4g
+    # 实测: 4g 会被 OOM 杀 (torch CUDA + MinerU 管线峰值 ~5g), 给 6g
+    mem_limit: 6g
 
 volumes:
   pg-data:
