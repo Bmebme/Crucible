@@ -106,12 +106,19 @@
               <span class="enum-count">{{ items.length }}</span>
             </template>
             <div class="enum-items">
-              <el-link
-                v-for="(r, i) in items" :key="i" type="primary" class="enum-tag"
-                :underline="false" @click="r.name.startsWith('wiki/') && openPage(r.name)"
+              <el-tooltip
+                v-for="(r, i) in items" :key="i"
+                :content="(r.snippet || r.description || '') + (r.entity_type ? ' [' + r.entity_type + ']' : '')"
+                placement="top" :show-after="200"
+                :disabled="!r.snippet && !r.description"
               >
-                {{ r.name }}
-              </el-link>
+                <el-link
+                  type="primary" class="enum-tag" :underline="false"
+                  @click="r.name.startsWith('wiki/') && openPage(r.name)"
+                >
+                  {{ r.name }}
+                </el-link>
+              </el-tooltip>
             </div>
           </el-collapse-item>
         </el-collapse>

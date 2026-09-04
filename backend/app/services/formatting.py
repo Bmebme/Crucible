@@ -32,6 +32,19 @@ def format_enum_compact(data: dict, category: str = "", full: bool = False) -> s
 
     names = {k: [r.get("name", "") for r in v] for k, v in groups.items()}
     lines: list[str] = []
+
+    def annotate(name: str, max_len: int = 60) -> str:
+        """条目 + 一句话简介 (wiki snippet / rag 实体描述)。"""
+        for r in data.get("results", []):
+            if r.get("name") != name:
+                continue
+            brief = (r.get("snippet") or r.get("description") or "").strip()
+            brief = " ".join(brief.split())
+            if brief:
+                return f"{name} — {brief[:max_len]}"
+            return name
+        return name
+
     if category:
         key = f"wiki:{category}" if category != "rag" else "rag"
         items = names.get(key, [])
@@ -39,7 +52,7 @@ def format_enum_compact(data: dict, category: str = "", full: bool = False) -> s
         shown, rest = items[:cap], items[cap:]
         lines.append(f"【{GROUP_LABEL.get(key, key)}】{len(items)} 项"
                      + ("（完整）" if not rest else f"（显示前 {cap}，余 {len(rest)} 项用 full=true 拉全）"))
-        lines.extend(f"- {i}" for i in shown)
+        lines.extend(f"- {annotate(i)}" for i in shown)
     else:
         total = len(data.get("results", []))
         wiki_n = sum(len(v) for k, v in names.items() if k != "rag")
@@ -49,9 +62,10 @@ def format_enum_compact(data: dict, category: str = "", full: bool = False) -> s
             if key not in names:
                 continue
             items = names[key]
-            cap = 15
+            cap = 10
             shown, rest = items[:cap], items[cap:]
-            lines.append(f"- {GROUP_LABEL.get(key, key)} ({len(items)}): {', '.join(shown)}"
+            annotated = "; ".join(annotate(i) for i in shown)
+            lines.append(f"- {GROUP_LABEL.get(key, key)} ({len(items)}): {annotated}"
                          + (f" …余 {len(rest)}" if rest else ""))
     if diff_wiki or diff_rag:
         lines.append(f"差异: wiki 侧缺 {len(diff_rag)} / rag 侧缺 {len(diff_wiki)} (知识缺口)")

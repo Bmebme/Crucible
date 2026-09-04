@@ -132,10 +132,19 @@ class FusionOrchestrator:
         merged = union_merge(
             wiki_pages, rag_names, aliases=alias_dict, llm_same=llm_same or None
         )
-        resp.results = [
-            {"kind": "item", "name": name, "provenance": ["union"]}
-            for name in merged.union
-        ]
+        # 枚举条目携带简介: wiki 侧带检索 snippet, rag 侧带实体 description
+        # (Agent 的「目录」要有书名+一句话简介, 不能只有裸名字)
+        wiki_meta = {h.path: (h.title, h.snippet) for h in wiki_hits if h.path}
+        rag_meta = {e.name: (e.entity_type, e.description) for e in rag_entities}
+        resp.results = []
+        for name in merged.union:
+            item: dict[str, Any] = {"kind": "item", "name": name, "provenance": ["union"]}
+            if name in wiki_meta:
+                item["snippet"] = wiki_meta[name][1]
+            elif name in rag_meta:
+                item["entity_type"] = rag_meta[name][0]
+                item["description"] = rag_meta[name][1]
+            resp.results.append(item)
         resp.differences = merged.differences
         resp.notes.append(
             f"union={len(merged.union)} wiki={len(merged.wiki_items)} "
