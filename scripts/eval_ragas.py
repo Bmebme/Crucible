@@ -58,6 +58,10 @@ def evaluate_with_ragas(
     results: list[dict], llm_base: str, llm_key: str, llm_model: str,
     with_context: bool = False,
 ) -> dict:
+    # 嵌入模型走本地缓存 (HF 直连被墙, 与 rag_engine 同约定)
+    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+    import huggingface_hub.constants as _hc
+    _hc.HF_HUB_OFFLINE = True
     from datasets import Dataset
     from langchain_openai import ChatOpenAI
     from ragas import evaluate
@@ -83,7 +87,7 @@ def evaluate_with_ragas(
         )
     )
     ds = Dataset.from_list(results)
-    scores = evaluate(ds, metrics=metrics, llm=llm, embedding=embedding)
+    scores = evaluate(ds, metrics=metrics, llm=llm, embeddings=embedding)
     return scores.to_pandas().mean(numeric_only=True).to_dict()
 
 
