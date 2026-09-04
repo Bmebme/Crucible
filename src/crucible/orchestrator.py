@@ -17,7 +17,7 @@ from .merge import m2_consistency
 from .merge.aliases import candidate_pairs, load_alias_dict, resolve_llm_pairs
 from .merge.m1_union import normalize_name, union_merge
 from .merge.m3_state import sort_by_verify_state
-from .schemas import FusionResponse, QueryType, WikiHit
+from .schemas import Citation, FusionResponse, QueryType, WikiHit
 
 
 class FusionOrchestrator:
@@ -164,11 +164,22 @@ class FusionOrchestrator:
         resp.notes.append(f"verified_weighted={len(resp.results)}")
 
     async def _run_mechanism(self, query: str, resp: FusionResponse) -> None:
-        """Q2: 双引擎召回 → M2 一致性比对 (LLM 只比对不重写)。"""
-        wiki_hits, rag_answer = await asyncio.gather(
+        """Q2: 双引擎召回 → M2 一致性比对 (LLM 只比对不重写) + 引用层接地。"""
+        wiki_hits, rag_answer, rag_context = await asyncio.gather(
             self.wiki.search(self.project_id, query, limit=3),
             self.rag.query(self.project_path, query, mode="hybrid"),
+            self.rag.query_context(self.project_path, query, mode="hybrid"),
         )
+        # 引用层: wiki 命中自带引用; rag 侧从检索上下文 chunk 摘原文
+        rag_citations = [
+            Citation(
+                source="rag",
+                chunk_id=c.reference_id,
+                heading_path=c.headings,
+                excerpt=c.content[:400],
+            )
+            for c in rag_context[:3]
+        ]
         wiki_top = wiki_hits[0] if wiki_hits else None
         if wiki_top is None and not rag_answer:
             resp.notes.append("两引擎均无召回")
@@ -186,11 +197,28 @@ class FusionOrchestrator:
             if wiki_top:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
             if rag_answer:
-                resp.results.append({"kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300], "provenance": ["rag"], "confidence": "degraded"})
+                resp.results.append({
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                    "provenance": ["rag"], "confidence": "degraded",
+                    "citations": [c.to_dict() for c in rag_citations],
+                })
             resp.notes.append("M2 降级: LLM 不可用, 单源并列输出")
             return
 
+        all_citations = (wiki_top.citations if wiki_top else []) + rag_citations
         if compared.get("consistent"):
+            # 强制接地: 无引用不输出合并结论 (宁缺毋滥, 守 faithfulness)
+            if not all_citations:
+                resp.notes.append("M2 合并结论无引用支撑, 降级为并列输出")
+                if wiki_top:
+                    resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
+                if rag_answer:
+                    resp.results.append({
+                        "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                        "provenance": ["rag"], "confidence": "degraded",
+                        "citations": [c.to_dict() for c in rag_citations],
+                    })
+                return
             resp.results.append(
                 {
                     "kind": "conclusion",
@@ -198,6 +226,7 @@ class FusionOrchestrator:
                     "evidence": compared.get("evidence"),
                     "confidence": "high",
                     "provenance": ["wiki", "rag", "M2"],
+                    "citations": [c.to_dict() for c in all_citations],
                 }
             )
         else:
@@ -205,5 +234,9 @@ class FusionOrchestrator:
             if wiki_top:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"]})
             if rag_answer:
-                resp.results.append({"kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300], "provenance": ["rag"]})
+                resp.results.append({
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                    "provenance": ["rag"],
+                    "citations": [c.to_dict() for c in rag_citations],
+                })
             resp.notes.append("冲突对峙输出: 不裁决, 由 Agent/人裁决后回写")

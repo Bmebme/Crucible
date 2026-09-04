@@ -81,6 +81,17 @@
           <div v-if="r.snippet" class="ri-snippet">{{ r.snippet }}</div>
           <div v-if="r.note" class="ri-note">📌 {{ r.note }}</div>
           <div v-if="r.path" class="ri-path">📄 {{ r.path }}</div>
+          <div v-if="r.citations?.length" class="ri-citations">
+            <div class="cit-title">🔗 引用（{{ r.citations.length }}）</div>
+            <div v-for="(c, ci) in r.citations" :key="ci" class="cit-item">
+              <el-tag size="small" :type="c.source === 'wiki' ? 'primary' : 'success'">{{ c.source }}</el-tag>
+              <template v-if="c.source === 'wiki' && c.path">
+                <el-link type="primary" class="cit-link" @click="openPage(c.path)">{{ c.path }}</el-link>
+              </template>
+              <span v-else-if="c.heading_path" class="cit-heading">{{ c.heading_path }}</span>
+              <div v-if="c.excerpt" class="cit-excerpt">{{ c.excerpt.slice(0, 200) }}</div>
+            </div>
+          </div>
         </div>
       </div>
       <el-empty v-else description="无结果" />
@@ -110,13 +121,17 @@
         />
       </template>
     </el-card>
+
+    <el-drawer v-model="drawer" :title="pagePath" size="55%">
+      <pre class="page-content">{{ pageContent || '加载中…' }}</pre>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
+import { api, fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
 
 const mode = ref('query')
 const projectId = ref('')
@@ -128,6 +143,21 @@ const historyText = ref('')
 const loading = ref(false)
 const result = ref<any>(null)
 const notes = ref<string[]>([])
+const drawer = ref(false)
+const pagePath = ref('')
+const pageContent = ref('')
+
+async function openPage(path: string) {
+  pagePath.value = path
+  pageContent.value = ''
+  drawer.value = true
+  try {
+    const { data } = await api.get(`/projects/${projectId.value}/pages/content`, { params: { path } })
+    pageContent.value = data.content
+  } catch (e: any) {
+    pageContent.value = '加载失败: ' + (e?.response?.data?.detail ?? e?.message)
+  }
+}
 
 const placeholder = ref('例如: MAE 有哪些外部接口？')
 
@@ -185,5 +215,15 @@ async function run() {
 .ri-snippet { margin-top: 6px; color: #303133; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
 .ri-note { margin-top: 4px; color: #b8860b; font-size: 12px; }
 .ri-path { margin-top: 4px; color: #909399; font-size: 12px; }
+.ri-citations { margin-top: 8px; background: #f8fafc; border-radius: 6px; padding: 8px 10px; }
+.cit-title { font-size: 12px; color: #606266; margin-bottom: 6px; }
+.cit-item { margin-bottom: 6px; font-size: 12px; }
+.cit-link { font-size: 12px; margin-left: 4px; }
+.cit-heading { color: #606266; margin-left: 4px; }
+.cit-excerpt {
+  margin-top: 3px; color: #909399; font-size: 12px; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.page-content { white-space: pre-wrap; font-size: 13px; line-height: 1.7; }
 .conflict { margin-bottom: 8px; }
 </style>

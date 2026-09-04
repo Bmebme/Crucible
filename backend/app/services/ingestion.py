@@ -62,9 +62,9 @@ async def ingest_document(
 
         await _update_job(job_id, status="wiki_indexed", wiki_path=wiki_path)
 
-        # 3. 通道 B: rag 摄入 (纯文本)
+        # 3. 通道 B: rag 摄入 (纯文本; source_name 写入 reference 列表供引用层锚定)
         rag = await get_rag(project_path)
-        ok = await rag.ingest(project_path, text)
+        ok = await rag.ingest(project_path, text, source_name=filename)
         if not ok:
             await _update_job(
                 job_id, status="failed", error="rag 摄入失败 (引擎未就绪或 ainsert 失败)"
