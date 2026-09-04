@@ -210,3 +210,45 @@ python-dotenv, requests/urllib3, yarl/multidict/frozenlist/propcache (aiohttp �
 
 bge-small-zh-v1.5 嵌入 (HF 缓存) + tiktoken cl100k_base + MinerU 模型
 (docreader 镜像已烧入) —— 见 §7 离线摆渡。
+
+## 9. GitHub 摆渡流程 (仅 GitHub 通道的内网)
+
+适用: 内网无法访问 pypi/hf/modelscope 外网源, 唯一通道是 GitHub (代码
+clone + Release 资产下载)。
+
+### 9.1 摆渡物料
+
+| 物料 | 载体 | 说明 |
+|---|---|---|
+| 代码 | Git 仓库 (crucible + py-llm-wiki) | 内网 clone 即可 |
+| 模型包 (4.2GB) | GitHub Release `models-v1` (Bmebme/Crucible), 3 块 ≤2GB | MinerU pipeline 模型 + bge 嵌入 + tiktoken —— 内网唯一建不出来的部分 |
+| 镜像 | 不摆渡 | 内网用内源 docker build (清单见 §8 / py-llm-wiki RUN.md) |
+
+### 9.2 内网步骤
+
+```bash
+# 1. 下载模型包 (内网 GitHub 通道, 3 个文件)
+#    https://github.com/Bmebme/Crucible/releases/tag/models-v1
+cat models-part-* > models-bundle.tar.gz
+tar xzf models-bundle.tar.gz -C /tmp/ && sh /tmp/restore-models.sh
+#    → 解到 ~/.cache/huggingface + ~/.cache/tiktoken (宿主机)
+
+# 2. clone 代码 + 构建 (pypi/npm 指内源, 见 §8 清单)
+git clone <github>/Crucible && git clone <github>/py-llm-wiki
+cd Crucible && docker build -t deploy-crucible:latest .        # 或 compose build
+cd ../py-llm-wiki && docker build -t py-llm-wiki .
+cd ../Crucible && docker build -t deploy-docreader:with-models -f deploy/Dockerfile.docreader .
+
+# 3. 模型烧进 docreader 镜像 (宿主机 HF 缓存 → 容器)
+docker create --name dr-bake deploy-docreader:with-models
+docker cp ~/.cache/huggingface dr-bake:/root/.cache/huggingface
+docker commit dr-bake deploy-docreader:with-models && docker rm dr-bake
+
+# 4. 启动 (crucible 的 HF/tiktoken 缓存走宿主机绑定, 见 §2.1)
+```
+
+### 9.3 注意
+
+- Release 资产下载实际走 `objects.githubusercontent.com` —— 内网放行
+  GitHub 时需覆盖该域名 (只放行 github.com 会下载失败)
+- GitHub 无网盘般的大文件能力, 2GB/文件上限; 模型包更新时重新打包分块
