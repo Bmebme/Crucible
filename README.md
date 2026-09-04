@@ -1,5 +1,8 @@
 # Crucible 融合检索层 + 服务化工程
 
+> 📖 **先读这个**: [docs/FLOW.md](docs/FLOW.md) —— 一页看懂全流程
+> (部署 → 使用 → 日常操作 → 概念速查 → 常见问题)
+
 llm_wiki 页面引擎 × LightRAG 实体图引擎的**判别、召回与合并**工程实现。
 设计依据: 设计文档 §5（../knowledge-fusion/DESIGN-search-strategy.md）、
 决策记录 [docs/decisions.md](docs/decisions.md)、工程化方案
