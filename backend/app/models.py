@@ -17,6 +17,9 @@ class Project(Base):
     wiki_project_id: Mapped[str] = mapped_column(
         String(64), default=""
     )  # llm-wiki 侧的项目 id (可与本系统 id 不同)
+    related_projects: Mapped[list] = mapped_column(
+        JSON, default=list
+    )  # 软隔离: 关联产品 id 列表 (联邦检索低权重参考区)
     rag_workdir: Mapped[str] = mapped_column(
         Text, default=""
     )  # LightRAG 工作目录覆盖 (空 = <path>/.lightrag)

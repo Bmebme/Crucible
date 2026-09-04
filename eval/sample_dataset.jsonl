@@ -1,3 +1,20 @@
-{"question": "FM REST API 的鉴权是怎么做的？", "reference": "FM REST API 通过统一认证鉴权体系实现，基于 JWT 认证和 RBAC 角色权限模型，由 fm-api-gateway 使用 Spring Security 实现。"}
-{"question": "Hiro 总线在 MAE 中起什么作用？", "reference": "Hiro 总线是 MAE 的路由总线/API 网关，功能上类似 nginx，用于将外部请求转移到内部微服务。"}
-{"question": "MAE 有哪些文件处理组件？", "reference": "MAE 的文件处理相关组件包括 SNMP Trap 报文解码模块、snmp-trap-parser 协议解析库等。"}
+{"question": "MAE 有哪些外部接口？", "reference": "MAE 的外部接口包括 FM REST API (HTTPS:443)、SNMP:162、TL1:1021、gRPC:9091、Syslog、LDAP 用户管理接口、TMF615 SOAP 接口等，用于告警上报、网管对接与运维接入。", "project": "mae"}
+{"question": "Hiro 总线在 MAE 中起什么作用？", "reference": "Hiro 总线是 MAE 的 API 网关/路由中间件，功能类似 nginx，用于将外部请求转移到内部微服务，是 L1 层路由架构的核心。", "project": "mae"}
+{"question": "FM REST API 的鉴权是怎么做的？", "reference": "FM REST API 通过统一认证鉴权体系实现，基于 JWT 认证和 RBAC 角色权限模型，由 fm-api-gateway 使用 Spring Security 实现。", "project": "mae"}
+{"question": "MAE 的告警数据流经过哪些处理阶段？", "reference": "告警数据流为 fm.alarm.raw → normalized → correlated → rootcause，经过采集、标准化、关联分析、根因分析四个阶段，各阶段通过 Kafka 消息流转。", "project": "mae"}
+{"question": "MAE 有哪些代码制品层？", "reference": "MAE 的 L4 代码制品层包括共享数据模型 (mae-alarm-model)、内部 SDK (mae-fm-client)、基础镜像 (mae-docker-base)、脚手架 (mae-service-archetype) 等。", "project": "mae"}
+{"question": "MAE 的内部通信有哪些总线？", "reference": "MAE 内部通信包括 HTTP 软件总线（同步调用+服务发现）、CORBA 总线（大数据量批量传输）、Kafka（异步消息），以及 Hiro 路由总线（API 网关）。", "project": "mae"}
+{"question": "mae-boot-starter 是什么？", "reference": "mae-boot-starter 是 MAE 全系统强制的统一启动器，提供健康检查、配置管理、监控埋点、OpenTelemetry 等功能，属于 L1 全系统强制框架。", "project": "mae"}
+{"question": "MAE 的文件处理组件有哪些？", "reference": "MAE 的文件处理相关组件包括 SNMP Trap 报文解码模块、snmp-trap-parser 协议解析库、厂商映射表等。", "project": "mae"}
+{"question": "MAE 的验证记录中 SSRF 是什么结果？", "reference": "SSRF 外部接口验证记录为 verified_success，通过 FM REST API 查询参数注入内网地址探测成功，接口未校验查询参数中的 URL 主机名。", "project": "mae"}
+{"question": "文件上传绕过验证是什么结果？", "reference": "文件上传类型绕过验证记录为 verified_blocked，上传 jsp 文件被 WAF 规则拦截，拦截特征为 Content-Type 校验加后缀白名单双重校验。", "project": "mae"}
+{"question": "MAE 的域有哪些？", "reference": "MAE 包含故障管理域 (FM)、性能管理域 (PM)、配置管理域 (CM)、智能运维与分析域 (AI-Ops)、系统管理与平台域 (Platform)、网元接入与适配域、服务编排与生命周期域等。", "project": "mae"}
+{"question": "华为5G基站的核心硬件组成是什么？", "reference": "华为5G基站以 BBU5900（含 UMPT 主控板、UBBP 基带板、UPEU 电源模块）加上 AAU（如 AAU5336）或 8 通道 RRU（如 RRU5250）为核心硬件。", "project": "station"}
+{"question": "eCPRI 接口是什么？", "reference": "eCPRI 是 CPRI 的增强演进标准，作为 DU 与 RU/AAU 之间的前传接口，支持 Cat A-F 多种功能切分，以应对 5G Massive MIMO 的带宽增长。", "project": "station"}
+{"question": "BBU5900 的 UBBP 基带板是干什么的？", "reference": "UBBP 基带板提供与射频模块通信的 eCPRI/CPRI 接口，完成上下行数据的基带处理，支持制式间基带资源重用和多制式并发。", "project": "station"}
+{"question": "5G 基站的 CU/DU 是怎么划分的？", "reference": "CU 负责非实时协议 (RRC/PDCP)，DU 负责物理层协议和实时服务 (RLC/MAC/PHY-High)，两者通过 F1 接口连接，存在 Option 1-7 多种切分选项。", "project": "station"}
+{"question": "CPRI 和 eCPRI 有什么区别？", "reference": "CPRI 传输含 IQ 数据的物理层数据，带宽需求大（5G Massive MIMO 比 4G 增长约 80 倍）；eCPRI 将链路抽象为传输网络，支持功能切分降低前传带宽。", "project": "station"}
+{"question": "华为5G宏站的机柜形态有哪些？", "reference": "华为5G宏站机柜有 BTS5900/BTS5900L（室内）、BTS5900A（室外）、DBS5900（分布式），电源采用 DCDU（如 DCDU-12B、DCDU16D）。", "project": "station"}
+{"question": "AAU5336 的规格是什么？", "reference": "AAU5336 频段 2.6G (2515-2675MHz)，32T32R，振子数 192，体积 965×470×169mm，重量约 31.9kg，接口 2×eCPRI。", "project": "station"}
+{"question": "5G 基站的部署架构有哪两种？", "reference": "5G 基站有 D-RAN（分布式，BBU 与 AAU/RRU 分布式部署）和 C-RAN（集中式，基带资源集中于机房）两种部署架构，5G 初期以 D-RAN 为主。", "project": "station"}
+{"question": "BBH 和 BBL 分别是什么？", "reference": "BBH（基带高）是 BBU 中实现基带功能的处理单元，BBL（基带低）是 RRU/AAU 中实现基带功能的单元，两者通过协商确定切分方案。", "project": "station"}

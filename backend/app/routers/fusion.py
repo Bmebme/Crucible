@@ -19,6 +19,7 @@ class QueryRequest(BaseModel):
     history: list[str] = Field(default_factory=list)
     env: str = ""
     alias_mode: str | None = None
+    include_related: bool = False  # 软隔离: 关联产品低权重参考区
 
 
 class EnumRequest(BaseModel):
@@ -26,6 +27,7 @@ class EnumRequest(BaseModel):
     project_id: str = "current"
     alias_mode: str | None = None
     summarize: bool = False  # LLM 导读 (文字化回答; 清单仍是权威本体)
+    include_related: bool = False  # 软隔离: 关联产品低权重参考区
 
 
 class ExperienceRequest(BaseModel):
@@ -91,6 +93,50 @@ def _core_cfg(s) -> object:
     )
 
 
+async def _related_hits(
+    proj, query: str, kind: str, alias_mode: str | None
+) -> list[dict]:
+    """软隔离 (任务 5): 关联产品低权重检索, 只做一级 (不递归追关联)。
+    结果进 related_hits 参考区, 永不进主结果/M1/M2 合并。"""
+    from ..repos import get_project as _get_project
+
+    hits: list[dict] = []
+    for rel_id in (proj.related_projects or []):
+        try:
+            rel = await _get_project(rel_id)
+            orch = await get_orchestrator(
+                rel_id, rel.path,
+                wiki_project_id=rel.wiki_project_id,
+                rag_workdir=rel.rag_workdir,
+            )
+            if alias_mode:
+                orch.config.alias_mode = alias_mode
+            if kind == "enum":
+                resp = await orch.run_enum(query)
+                items = [
+                    {
+                        "name": r.get("name"),
+                        "snippet": (r.get("snippet") or r.get("description") or "")[:150],
+                    }
+                    for r in resp.results[:10]
+                ]
+            else:
+                resp = await orch.run(query)
+                items = [
+                    {
+                        "kind": r.get("kind"),
+                        "name": (r.get("title") or r.get("name")
+                                 or str(r.get("conclusion", ""))[:100]),
+                        "snippet": (r.get("snippet") or str(r.get("conclusion", "")))[:200],
+                    }
+                    for r in resp.results[:5]
+                ]
+            hits.append({"project": rel_id, "weight": 0.1, "results": items})
+        except Exception:
+            continue
+    return hits
+
+
 @router.post("/query")
 async def fusion_query(req: QueryRequest) -> dict:
     t0 = time.monotonic()
@@ -108,6 +154,10 @@ async def fusion_query(req: QueryRequest) -> dict:
     except Exception as e:  # 引擎级异常兜底, 不向外抛栈
         raise HTTPException(status_code=500, detail=f"fusion error: {e}") from e
     data = resp.to_dict()
+    if req.include_related:
+        data["related_hits"] = await _related_hits(
+            proj, req.query, "query", req.alias_mode,
+        )
     await _log_query(
         req.project_id, req.query, str(data.get("routing", {}).get("query_type", "")),
         orch.config.alias_mode,
@@ -151,6 +201,10 @@ async def fusion_enum(req: EnumRequest) -> dict:
             )
         except Exception:
             data["summary"] = ""  # 导读失败降级为纯清单
+    if req.include_related:
+        data["related_hits"] = await _related_hits(
+            proj, req.hint, "enum", req.alias_mode,
+        )
     await _log_query(
         req.project_id, f"enum:{req.hint}", "Q1", orch.config.alias_mode, "",
         (time.monotonic() - t0) * 1000, "enum",

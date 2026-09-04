@@ -22,7 +22,7 @@ services:
   crucible:
     build:
       context: ..
-      dockerfile: ../Dockerfile
+      dockerfile: Dockerfile
     env_file: .env
     environment:
       # 默认容器内 llm-wiki 服务; 用宿主机 daemon 时 .env 设
@@ -49,7 +49,7 @@ services:
     image: ${DOCREADER_FULL_IMAGE:-deploy-docreader-light}
     build:
       context: ..
-      dockerfile: ../Dockerfile.docreader-light
+      dockerfile: deploy/Dockerfile.docreader-light
     environment:
       MINERU_MODEL_SOURCE: huggingface
       HF_ENDPOINT: https://hf-mirror.com

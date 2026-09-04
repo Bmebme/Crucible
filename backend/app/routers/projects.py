@@ -16,6 +16,7 @@ class ProjectCreate(BaseModel):
     path: str
     wiki_project_id: str = ""   # llm-wiki 侧项目 id (默认同 id)
     rag_workdir: str = ""       # LightRAG 工作目录覆盖
+    related_projects: list[str] = []  # 软隔离关联产品
     wiki_base: str = ""
     alias_mode: str = "l2+l3"
     rag_language: str = "Simplified Chinese"
@@ -50,6 +51,7 @@ async def create_project(p: ProjectCreate) -> dict:
             id=p.id, path=str(Path(p.path).resolve()),
             wiki_project_id=p.wiki_project_id or p.id,
             rag_workdir=p.rag_workdir,
+            related_projects=p.related_projects,
             wiki_base=p.wiki_base, alias_mode=p.alias_mode,
             rag_language=p.rag_language,
             rag_entity_guidance=p.rag_entity_guidance,

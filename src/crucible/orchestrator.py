@@ -17,6 +17,7 @@ from .merge import m2_consistency
 from .merge.aliases import candidate_pairs, load_alias_dict, resolve_llm_pairs
 from .merge.m1_union import normalize_name, union_merge
 from .merge.m3_state import sort_by_verify_state
+from .engines.wiki_engine import find_heading
 from .schemas import Citation, FusionResponse, QueryType, WikiHit
 
 
@@ -205,6 +206,17 @@ class FusionOrchestrator:
             for c in rag_context[:3]
         ]
         wiki_top = wiki_hits[0] if wiki_hits else None
+        # 引用段落级定位: 拉整页原文, 给 wiki 顶部引用补 heading_path
+        if wiki_top and wiki_top.citations:
+            try:
+                content = await self.wiki.read_page_content(
+                    self.project_id, wiki_top.path
+                )
+                heading = find_heading(content, wiki_top.snippet)
+                if heading:
+                    wiki_top.citations[0].heading_path = heading
+            except Exception:
+                pass
         if wiki_top is None and not rag_answer:
             resp.notes.append("两引擎均无召回")
             return

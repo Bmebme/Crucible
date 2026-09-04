@@ -79,6 +79,7 @@ async def kb_enum(
     project_id: str = "mae",
     category: str = "",
     full: bool = False,
+    related: bool = False,
 ) -> str:
     """枚举项目内与某主题相关的组件/接口/服务/概念 (Q1, 指标: 召回率)。
 
@@ -89,8 +90,15 @@ async def kb_enum(
     需要某类完整条目时用 category (concepts/entities/queries/sources/
     verification/rag) + full=true 逐类拉取。
     """
-    data = await _post("/fusion/enum", {"hint": hint, "project_id": project_id})
-    return _format_enum(data, category=category, full=full)
+    data = await _post("/fusion/enum", {"hint": hint, "project_id": project_id, "include_related": related})
+    out = _format_enum(data, category=category, full=full)
+    if related and data.get("related_hits"):
+        lines = [f"【关联产品参考 (权重 0.1)】"]
+        for rh in data["related_hits"]:
+            names = "; ".join(str(r.get("name", "")) for r in rh.get("results", [])[:8])
+            lines.append(f"- {rh['project']}: {names}")
+        out += "\n" + "\n".join(lines)
+    return out
 
 
 @mcp.tool()

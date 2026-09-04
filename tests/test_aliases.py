@@ -111,3 +111,13 @@ def test_citation_to_dict():
     d = c.to_dict()
     assert d["source"] == "wiki" and d["path"] == "wiki/entities/fm-api-gateway"
     assert d["chunk_id"] == "" and d["heading_path"] == ""
+
+
+def test_find_heading():
+    from crucible.engines.wiki_engine import find_heading
+
+    content = "# 页面标题\n\n## 第一节\n\n内容A\n\n## 第二节\n\n内容B提到鉴权。\n"
+    assert find_heading(content, "内容A") == "第一节"
+    assert find_heading(content, "鉴权") == "第二节"
+    assert find_heading(content, "不存在的片段") == ""
+    assert find_heading("", "x") == ""

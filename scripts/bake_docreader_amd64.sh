@@ -5,7 +5,7 @@
 set -e
 echo "[1/3] 起 amd64 容器"
 docker rm -f docreader-amd64-bake 2>/dev/null || true
-docker create --name docreader-amd64-bake --platform linux/amd64 deploy-docreader:amd64-base
+docker create --name docreader-amd64-bake deploy-docreader:amd64-base
 echo "[2/3] 拷贝模型缓存 (arm64 → amd64)"
 docker cp deploy-docreader-1:/root/.cache/huggingface /tmp/hf-bake && \
   docker cp /tmp/hf-bake docreader-amd64-bake:/root/.cache/huggingface

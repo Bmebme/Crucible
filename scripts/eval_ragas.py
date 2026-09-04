@@ -36,7 +36,7 @@ async def run_fusion_queries(api: str, project: str, dataset: list[dict]) -> lis
         for row in dataset:
             resp = await c.post(
                 f"{api}/fusion/query",
-                json={"query": row["question"], "project_id": project},
+                json={"query": row["question"], "project_id": row.get("project", project)},
             )
             data = resp.json()
             conclusion = next(
@@ -50,6 +50,8 @@ async def run_fusion_queries(api: str, project: str, dataset: list[dict]) -> lis
                 "answer": answer,
                 "contexts": contexts,
                 "reference": row["reference"],
+                "project": row.get("project", project),
+                "qtype": str(data.get("routing", {}).get("query_type", "")),
             })
     return results
 
@@ -109,11 +111,23 @@ def main() -> None:
     dataset = load_dataset(args.dataset)
     results = asyncio.run(run_fusion_queries(args.api, args.project, dataset))
     print(f"样本数: {len(results)}; 有引用的样本: {sum(1 for r in results if r['contexts'])}")
-    scores = evaluate_with_ragas(
-        results, llm_base, llm_key, llm_model, with_context=args.with_context
-    )
-    print("RAGAS 平均分:")
-    print(json.dumps(scores, ensure_ascii=False, indent=2))
+
+    by_type: dict[str, list] = {}
+    for r in results:
+        by_type.setdefault(r["qtype"] or "?", []).append(r)
+    all_scores: dict[str, dict] = {}
+    for qtype, group in by_type.items():
+        if len(group) < 2:
+            continue
+        scores = evaluate_with_ragas(
+            group, llm_base, llm_key, llm_model, with_context=args.with_context
+        )
+        all_scores[qtype] = scores
+        print(f"--- {qtype} ({len(group)} 样本) ---")
+        print(json.dumps(scores, ensure_ascii=False, indent=2))
+    if not all_scores:
+        print("无分组可评测 (每组至少 2 样本)")
+
 
 
 if __name__ == "__main__":

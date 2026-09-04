@@ -15,6 +15,19 @@ import httpx
 from ..schemas import Citation, WikiHit
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
+
+
+def find_heading(content: str, snippet: str) -> str:
+    """在整页原文里定位 snippet 所属的最近标题 (引用段落级锚点, 任务 8)。"""
+    if not content or not snippet:
+        return ""
+    probe = " ".join(snippet.split())[:60]
+    idx = content.find(probe)
+    if idx < 0:
+        return ""
+    matches = list(_HEADING_RE.finditer(content[:idx]))
+    return matches[-1].group(2).strip() if matches else ""
 
 # wiki 后端是 localhost 服务: 禁止 httpx 读取环境代理 (trust_env),
 # 否则 HTTP_PROXY 等环境变量会把本机流量劫持到代理导致超时。

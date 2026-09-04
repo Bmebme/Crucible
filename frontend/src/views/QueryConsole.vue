@@ -151,6 +151,19 @@
       </div>
       <el-empty v-else description="无结果" />
 
+      <template v-if="result.related_hits?.length">
+        <el-divider content-position="left"><b>关联产品参考</b>（软隔离 · 权重 0.1，不参与合并）</el-divider>
+        <div v-for="(rh, i) in result.related_hits" :key="i" class="related-block">
+          <el-tag size="small" type="warning">{{ rh.project }} · w={{ rh.weight }}</el-tag>
+          <div class="related-items">
+            <div v-for="(r, j) in rh.results" :key="j" class="related-item">
+              <span class="ri-name">{{ r.name }}</span>
+              <span v-if="r.snippet" class="related-snippet">{{ r.snippet.slice(0, 100) }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <template v-if="result.differences?.length">
         <el-divider content-position="left">
           <b>差异清单</b>（知识缺口信号）{{ result.differences.length }} 项
@@ -349,6 +362,10 @@ async function run() {
 </style>
 
 <style scoped>
+.related-block { padding: 8px 0; border-bottom: 1px dashed #e4e7ed; }
+.related-items { margin-top: 6px; }
+.related-item { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; font-size: 13px; }
+.related-snippet { color: #909399; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px; }
 .enum-stats { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
 .enum-summary { margin-bottom: 6px; }
 .enum-collapse { border: none; }
