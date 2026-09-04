@@ -173,7 +173,7 @@ docker compose up -d
 
 ## 8. crucible 镜像的内源清单 (内网构建用)
 
-crucible 镜像 (deploy/Dockerfile) 构建下载三类东西:
+crucible 镜像 (Dockerfile (仓库根)) 构建下载三类东西:
 
 ### 8.1 基础镜像 + apt
 
