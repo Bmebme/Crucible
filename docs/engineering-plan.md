@@ -13,7 +13,12 @@
 | P1c docker-compose + 统一 .env | ✅ 全栈容器实测: crucible+PG, wiki 走 host.docker.internal, HF/tiktoken 缓存绑定, 冷启动 6.7s; 项目路径在容器内为 /data/<name> |
 | P3a md/txt 上传双通道 | ✅ 实测 (原子写入 + 状态机 done) |
 | P4a 前端三页面 | ✅ Vue3+Element Plus, 构建产物由 FastAPI 托管 |
-| P2 引用层 / P3 MinerU / P5 对齐管理台账 / P6 MCP+RAGAS+SSO | ⏳ 后续 |
+| P2 引用层 | ✅ Citation 契约 + 双引擎原文锚定 + M2 强制接地; 容器实测: M2 结论带 4 引用 (1 wiki 路径 + 3 rag 原文 chunk); 前端点击 wiki 引用弹整页原文抽屉 |
+| P3 MinerU / P5 对齐管理台账 / P6 MCP+RAGAS+SSO | ⏳ 后续 |
+
+> 运维注意: 本地开发与容器共享同一个 PG, 但项目路径命名空间不同
+> (容器内 /data/<name>, 本地 /Users/...)。切换形态时需 UPDATE projects 表
+> (或本地开发注册独立 project id)。
 
 ## 1. 目标形态
 
