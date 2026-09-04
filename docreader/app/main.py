@@ -58,10 +58,11 @@ async def parse(file: UploadFile = File(...)) -> dict:
             out = Path(td) / "out"
             try:
                 proc = subprocess.run(
-                    ["mineru", "-p", str(src), "-o", str(out)],
+                    ["mineru", "-b", "pipeline", "-p", str(src), "-o", str(out)],
                     capture_output=True, text=True, timeout=900,
                 )
-                mds = list((out / src.stem).glob("*.md")) if (out / src.stem).exists() else []
+                # 输出结构: out/<stem>/auto/<stem>.md (嵌套)
+                mds = list((out / src.stem).rglob("*.md")) if (out / src.stem).exists() else []
                 if proc.returncode == 0 and mds:
                     text = mds[0].read_text(encoding="utf-8")
                     engine = "mineru"
