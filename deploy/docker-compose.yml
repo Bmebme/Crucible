@@ -25,8 +25,9 @@ services:
       dockerfile: deploy/Dockerfile
     env_file: .env
     environment:
-      # docker 内访问宿主机: llm-wiki daemon (本地 19828) 与 PG
-      CRUCIBLE_WIKI_BASE: http://host.docker.internal:19828
+      # 默认容器内 llm-wiki 服务; 用宿主机 daemon 时 .env 设
+      # CRUCIBLE_WIKI_BASE=http://host.docker.internal:19828
+      CRUCIBLE_WIKI_BASE: ${CRUCIBLE_WIKI_BASE:-http://llm-wiki:19828}
       CRUCIBLE_DATABASE_URL: postgresql+asyncpg://crucible:${PG_PASSWORD:-crucible}@postgres:5432/crucible
       # docreader 服务 (P3)
       CRUCIBLE_DOCREADER_BASE: http://docreader:8081
@@ -55,6 +56,25 @@ services:
     ports:
       - "8081:8081"
 
+  # 页面知识库后端 (py-llm-wiki daemon 容器化, 需与 crucible 同级 clone:
+  # git clone https://github.com/Bmebme/py-llm-wiki.git, bootstrap.sh 自动处理)
+  llm-wiki:
+    build:
+      context: ../py-llm-wiki
+    env_file: .env
+    environment:
+      PY_LLM_WIKI_DATA_DIR: /data
+      LLM_WIKI_LLM_BASE: ${LLM_WIKI_LLM_BASE:-}
+      LLM_WIKI_LLM_API_KEY: ${LLM_WIKI_LLM_API_KEY:-}
+      LLM_WIKI_LLM_MODEL: ${LLM_WIKI_LLM_MODEL:-}
+    ports:
+      - "19828:19828"
+    volumes:
+      - llm-wiki-data:/data
+      - ${DATA_ROOT:-./data}:/projects
+    profiles: ["full"]   # 本机有宿主机 daemon 时默认不启用, --profile full 切换
+
 volumes:
   pg-data:
   mineru-models:
+  llm-wiki-data:

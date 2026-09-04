@@ -13,7 +13,15 @@ if [ ! -f .env ]; then
 fi
 grep -q "sk-xxx" .env && { echo "  ⚠ .env 里 LLM_API_KEY 还是占位符 sk-xxx, 请先填写"; exit 1; }
 
-echo "[2/5] 基础镜像 (Docker Hub 被墙时经 daocloud)"
+echo "[2/6] py-llm-wiki (llm-wiki 服务构建源, 与 crucible 同级)"
+if [ -d ../py-llm-wiki ]; then
+  echo "  ✓ ../py-llm-wiki 已存在"
+else
+  echo "  → clone 中 (GitHub 间歇阻断, 自动重试 3 次)"
+  for i in 1 2 3; do git clone --depth 1 https://github.com/Bmebme/py-llm-wiki.git ../py-llm-wiki && break; sleep 15; done
+fi
+
+echo "[3/6] 基础镜像 (Docker Hub 被墙时经 daocloud)"
 for img in postgres:16-alpine python:3.12-slim; do
   if docker image inspect "$img" >/dev/null 2>&1; then
     echo "  ✓ $img 已存在"
@@ -24,13 +32,13 @@ for img in postgres:16-alpine python:3.12-slim; do
   fi
 done
 
-echo "[3/5] 构建 (crucible 首次 30-60 分钟含 torch; docreader-light 快)"
+echo "[4/6] 构建 (crucible 首次 30-60 分钟含 torch; docreader-light 快)"
 docker compose build crucible docreader
 
-echo "[4/5] 启动"
+echo "[5/6] 启动"
 docker compose up -d
 
-echo "[5/5] 健康检查"
+echo "[6/6] 健康检查"
 sleep 10
 curl -sf http://127.0.0.1:8080/health >/dev/null \
   && echo "  ✓ http://127.0.0.1:8080/health ok" \
