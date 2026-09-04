@@ -55,19 +55,24 @@ async def parse(file: UploadFile = File(...)) -> dict:
         text = ""
         engine = ""
         if _MINERU:
-            out = Path(td) / "out"
-            try:
-                proc = subprocess.run(
-                    ["mineru", "-b", "pipeline", "-p", str(src), "-o", str(out)],
-                    capture_output=True, text=True, timeout=900,
-                )
-                # 输出结构: out/<stem>/auto/<stem>.md (嵌套)
-                mds = list((out / src.stem).rglob("*.md")) if (out / src.stem).exists() else []
-                if proc.returncode == 0 and mds:
-                    text = mds[0].read_text(encoding="utf-8")
-                    engine = "mineru"
-            except Exception as e:  # 超时/崩溃 → 兜底
-                logger.warning("mineru failed: %s", e)
+            # mineru 内部任务服务器偶发连接失败 (模拟环境高发), 重试一次自愈
+            for attempt in (1, 2):
+                out = Path(td) / "out"
+                try:
+                    proc = subprocess.run(
+                        ["mineru", "-b", "pipeline", "-p", str(src), "-o", str(out)],
+                        capture_output=True, text=True, timeout=2400,
+                    )
+                    # 输出结构: out/<stem>/auto/<stem>.md (嵌套)
+                    mds = list((out / src.stem).rglob("*.md")) if (out / src.stem).exists() else []
+                    if proc.returncode == 0 and mds:
+                        text = mds[0].read_text(encoding="utf-8")
+                        engine = "mineru"
+                        break
+                    logger.warning("mineru attempt %s failed (rc=%s), 重试", attempt, proc.returncode)
+                except Exception as e:  # 超时/崩溃 → 兜底
+                    logger.warning("mineru failed: %s", e)
+                    break
 
         if not text and _MARKITDOWN:
             try:
