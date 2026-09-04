@@ -146,3 +146,27 @@ curl -s -X POST http://localhost:8080/fusion/enum -d '{"hint":"组件","project_
 - [ ] torch CPU-only 构建 (镜像 9.88GB → ~6GB)
 - [ ] PG 备份脚本 (pg_dump + 项目目录打包)
 - [ ] SSO 接入 (待组织方案)
+
+## 7. 内网部署 (离线摆渡)
+
+内网通常无外网, 用 pack-offline.sh 打成单目录拷入:
+
+```bash
+# 外网机器 (本机):
+scripts/pack-offline.sh                  # 产出 offline-bundle/
+# 拷入内网 (scp/U盘/内网中转机):
+# 内网机器:
+./restore-intranet.sh                    # 恢复镜像+缓存+代码
+cd crucible/deploy && cp .env.example .env
+# 编辑 .env: LLM_BASE 指向内网 LLM 端点 (OpenAI 兼容), 见下
+docker compose up -d
+```
+
+**内网前提 (部署前必须确认)**:
+1. **镜像架构一致**: 本机打包是 arm64 (Apple Silicon); 内网若是 x86_64 服务器,
+   打包前重建: `docker compose build --platform linux/amd64` (首次约 40 分钟,
+   torch 重新拉 amd64 轮子)
+2. **内网 LLM 端点**: 判别兜底/M2 比对/L3 消解/导读/摄入抽取都需要
+   OpenAI 兼容的 LLM 接口; 无则这些能力静默降级 (规则判别/M1 仍可用)
+3. **内网 LightRAG demo**: 若启用, 把 rag_engine 换 HTTP 客户端指向它
+   (待办: 同契约替换)
