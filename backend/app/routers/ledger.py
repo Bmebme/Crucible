@@ -43,6 +43,35 @@ async def aliases_file(project_id: str) -> dict:
     return {"exists": True, "content": p.read_text(encoding="utf-8")}
 
 
+@router.get("/{project_id}/graph")
+async def entity_graph(project_id: str, top_n: int = 80) -> dict:
+    """实体图 (LightRAG graphml → 前端可视化)。按度数取 top_n 节点。"""
+    from pathlib import Path
+
+    import networkx as nx
+
+    proj = await get_project(project_id)
+    wd = Path(proj.rag_workdir) if proj.rag_workdir else Path(proj.path) / ".lightrag"
+    gml = wd / "graph_chunk_entity_relation.graphml"
+    if not gml.exists():
+        return {"nodes": [], "edges": []}
+    g = nx.read_graphml(str(gml))
+    # 按度数取中心子图
+    top = sorted(g.degree, key=lambda d: d[1], reverse=True)[:top_n]
+    keep = {n for n, _ in top}
+    nodes = [
+        {"id": str(n), "type": str(a.get("entity_type", "")),
+         "description": str(a.get("description", ""))[:120],
+         "degree": g.degree(n)}
+        for n, a in g.nodes(data=True) if n in keep
+    ]
+    edges = [
+        {"s": str(u), "t": str(v)}
+        for u, v in g.edges() if u in keep and v in keep
+    ]
+    return {"nodes": nodes, "edges": edges, "total_nodes": g.number_of_nodes()}
+
+
 @router.post("/{project_id}/alias-reviews/{review_id}/resolve")
 async def resolve_alias(project_id: str, review_id: int, req: ResolveRequest) -> dict:
     if req.action not in ("approve", "reject"):
