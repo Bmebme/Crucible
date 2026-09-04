@@ -10,7 +10,7 @@
 |---|---|
 | P1a FastAPI + 引擎单例 | ✅ 实测 (enum 冷 10.6s → 热 5.6s) |
 | P1b PG 元数据层 | ✅ projects/ingestion_jobs/query_logs (SQLAlchemy async) |
-| P1c docker-compose + 统一 .env | 🟡 postgres 容器已跑 (daocloud 镜像); crucible 镜像已构建 (9.88GB, 去 build-essential 绕过内存限额); **Docker Desktop daemon 卡死 (prune/start 均无响应), 需重启 Docker Desktop 后 compose up 验证**; 本地开发服务用 scripts/run-server.sh 守护 (自动重启) |
+| P1c docker-compose + 统一 .env | ✅ 全栈容器实测: crucible+PG, wiki 走 host.docker.internal, HF/tiktoken 缓存绑定, 冷启动 6.7s; 项目路径在容器内为 /data/<name> |
 | P3a md/txt 上传双通道 | ✅ 实测 (原子写入 + 状态机 done) |
 | P4a 前端三页面 | ✅ Vue3+Element Plus, 构建产物由 FastAPI 托管 |
 | P2 引用层 / P3 MinerU / P5 对齐管理台账 / P6 MCP+RAGAS+SSO | ⏳ 后续 |
