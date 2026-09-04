@@ -14,7 +14,10 @@
 | P3a md/txt 上传双通道 | ✅ 实测 (原子写入 + 状态机 done) |
 | P4a 前端三页面 | ✅ Vue3+Element Plus, 构建产物由 FastAPI 托管 |
 | P2 引用层 | ✅ Citation 契约 + 双引擎原文锚定 + M2 强制接地; 容器实测: M2 结论带 4 引用 (1 wiki 路径 + 3 rag 原文 chunk); 前端点击 wiki 引用弹整页原文抽屉 |
-| P3 MinerU / P5 对齐管理台账 / P6 MCP+RAGAS+SSO | ⏳ 后续 |
+| P3 MinerU 管线 | ✅ 端到端实测: 52 页 PDF → MinerU(pipeline 后端) → 121KB md → 双通道 done; 模型补全实录见 Dockerfile.docreader 注释 |
+| P5 对齐管理 + 台账 | ✅ 三表 + L3 审核队列; 实测审批回写 kb-aliases.yaml 幂等; 前端台账/对齐管理/实体图页 |
+| P6 MCP + RAGAS | ✅ MCP 4 工具 (检索阶梯描述); RAGAS 基线 faithfulness 0.517 / answer_relevancy 0.935 (口径说明见 eval/README); 实体图 402 节点 |
+| SSO / 内网 LightRAG 替换 / torch CPU-only 瘦身 | ⏳ 待用户输入/后续优化 |
 
 > 运维注意: 本地开发与容器共享同一个 PG, 但项目路径命名空间不同
 > (容器内 /data/<name>, 本地 /Users/...)。切换形态时需 UPDATE projects 表
