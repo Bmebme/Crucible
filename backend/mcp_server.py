@@ -52,15 +52,87 @@ async def _upload_verification(
         return resp.json()
 
 
-@mcp.tool()
-async def kb_enum(hint: str, project_id: str = "mae") -> dict:
-    """枚举项目内与某主题相关的组件/接口/服务/概念清单 (Q1 枚举型, 指标: 召回率)。
+def _format_enum(data: dict, category: str = "", full: bool = False) -> str:
+    """枚举结果 → 紧凑文本 (Agent 上下文友好)。
 
-    用途: 攻击场景构建阶段 —— 先摸清攻击面。步骤①, 应在 kb_mechanism 之前调用。
-    返回 union 清单 + 差异清单 (两引擎不一致处, 即知识缺口)。
-    hint 用具体名词, 如「组件」「外部接口」「文件处理」「鉴权」。
+    结构: 总数/构成 → 分组条目 (每类截断) → 差异摘要 → 拉全指引。
+    category 指定只列某类 (concepts/entities/queries/sources/verification/rag);
+    full=True 时该类别不截断。
     """
-    return await _post("/fusion/enum", {"hint": hint, "project_id": project_id})
+    results = data.get("results", [])
+    groups: dict[str, list[str]] = {}
+    for r in results:
+        n = str(r.get("name", ""))
+        if n.startswith("wiki/"):
+            seg = n[5:].split("/")[0]
+            groups.setdefault(f"wiki:{seg}", []).append(n)
+        else:
+            groups.setdefault("rag", []).append(n)
+    for k in groups:
+        groups[k].sort()
+
+    diff_wiki = [d["item"] for d in data.get("differences", []) if d.get("only_in") == "wiki"]
+    diff_rag = [d["item"] for d in data.get("differences", []) if d.get("only_in") == "rag"]
+    alias_notes = [n for n in data.get("notes", []) if n.startswith("alias:")]
+
+    label = {"wiki:concepts": "概念页", "wiki:entities": "实体页", "wiki:queries": "查询页",
+             "wiki:sources": "源文档", "wiki:verification": "验证记录", "rag": "LightRAG 实体"}
+
+    lines: list[str] = []
+    if category:
+        key = f"wiki:{category}" if category != "rag" else "rag"
+        items = groups.get(key, [])
+        cap = len(items) if full else 30
+        shown, rest = items[:cap], items[cap:]
+        lines.append(f"【{label.get(key, key)}】{len(items)} 项" + ("（完整）" if not rest else f"（显示前 {cap}，余 {len(rest)} 项用 full=true 拉全）"))
+        lines.extend(f"- {i}" for i in shown)
+    else:
+        lines.append(f"【枚举】共 {len(results)} 项: wiki {sum(len(v) for k, v in groups.items() if k != 'rag')} 页 + rag {len(groups.get('rag', []))} 实体")
+        for key in ("wiki:concepts", "wiki:entities", "wiki:verification", "wiki:sources", "wiki:queries", "rag"):
+            if key not in groups:
+                continue
+            items = groups[key]
+            cap = 15
+            shown, rest = items[:cap], items[cap:]
+            lines.append(f"- {label.get(key, key)} ({len(items)}): {', '.join(shown)}" + (f" …余 {len(rest)}" if rest else ""))
+        lines.append("完整清单: 用 category 参数指定类别 (concepts/entities/queries/sources/verification/rag) 逐类拉取")
+    if diff_wiki or diff_rag:
+        lines.append(f"差异: wiki 侧缺 {len(diff_rag)} / rag 侧缺 {len(diff_wiki)} (知识缺口, 需处理时拉差异清单)")
+    if alias_notes:
+        lines.append(f"名字对齐: {len(alias_notes)} 条命中")
+    return "\n".join(lines)
+
+
+def _format_experience(data: dict) -> str:
+    lines = [f"【验证记录】{len(data.get('results', []))} 条 (按 verify_state 加权降序)"]
+    for r in data.get("results", [])[:15]:
+        lines.append(
+            f"- [{r.get('weight')}] {r.get('state')}: {r.get('title') or r.get('path')}"
+            + (f" — {r.get('note')}" if r.get("note") else "")
+        )
+    if len(data.get("results", [])) > 15:
+        lines.append(f"…余 {len(data['results']) - 15} 条")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def kb_enum(
+    hint: str,
+    project_id: str = "mae",
+    category: str = "",
+    full: bool = False,
+) -> str:
+    """枚举项目内与某主题相关的组件/接口/服务/概念 (Q1, 指标: 召回率)。
+
+    用途: 攻击场景构建阶段 —— 先摸清攻击面。步骤①, 在 kb_mechanism 之前调用。
+    hint 用具体名词, 如「组件」「外部接口」「文件处理」「鉴权」。
+
+    返回紧凑文本清单 (统计 + 分组 + 截断), 不会一次性倾倒全部条目;
+    需要某类完整条目时用 category (concepts/entities/queries/sources/
+    verification/rag) + full=true 逐类拉取。
+    """
+    data = await _post("/fusion/enum", {"hint": hint, "project_id": project_id})
+    return _format_enum(data, category=category, full=full)
 
 
 @mcp.tool()
@@ -80,16 +152,17 @@ async def kb_mechanism(
 
 
 @mcp.tool()
-async def kb_experience(query: str, project_id: str = "mae", env: str = "staging") -> dict:
+async def kb_experience(query: str, project_id: str = "mae", env: str = "staging") -> str:
     """查询历史验证记录/拦截特征/误报记录 (Q3 经验型, 指标: 可信度)。
 
     用途: POC 生成与验证阶段 —— 「以前打过什么/被什么拦过/成功过吗」。
     步骤③; 结果按 verify_state 加权排序 (成功>未验证>拦截负知识),
-    blocked 记录仅在环境匹配时返回。
+    blocked 记录仅在环境匹配时返回。返回紧凑文本清单 (最多 15 条)。
     """
-    return await _post(
+    data = await _post(
         "/fusion/experience", {"query": query, "project_id": project_id, "env": env},
     )
+    return _format_experience(data)
 
 
 @mcp.tool()
