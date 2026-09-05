@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listJobs, listProjects, uploadDocument } from '../api'
 
@@ -98,6 +98,12 @@ onMounted(async () => {
   } catch (e: any) {
     ElMessage.warning('后端未连接: ' + (e?.message ?? e))
   }
+})
+
+// 切换项目自动换任务列表, 不用手点刷新 (内网实调反馈)
+watch(projectId, async () => {
+  stopPolling()
+  await refresh()
 })
 
 onBeforeUnmount(stopPolling)
