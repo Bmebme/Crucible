@@ -9,11 +9,11 @@
         <el-form-item label="项目路径">
           <el-input v-model="form.path" placeholder="/绝对/路径/到/项目" />
         </el-form-item>
-        <el-form-item label="llm-wiki 项目 ID">
-          <el-input v-model="form.wiki_project_id" placeholder="llm-wiki 侧的项目 id (默认同项目 ID)" />
+        <el-form-item label="llm-wiki 项目 ID (高级)">
+          <el-input v-model="form.wiki_project_id" placeholder="留空自动同步创建, 不要手填" />
         </el-form-item>
-        <el-form-item label="LightRAG 工作目录">
-          <el-input v-model="form.rag_workdir" placeholder="留空 = <项目路径>/.lightrag" />
+        <el-form-item label="LightRAG 工作目录 (高级)">
+          <el-input v-model="form.rag_workdir" placeholder="留空 = <项目路径>/.lightrag (自动)" />
         </el-form-item>
         <el-form-item label="对齐模式">
           <el-select v-model="form.alias_mode" style="width: 140px">

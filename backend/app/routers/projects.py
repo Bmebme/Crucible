@@ -40,6 +40,25 @@ async def projects() -> list[dict]:
     ]
 
 
+async def _wiki_project_exists(wiki_project_id: str) -> bool:
+    """校验 llm-wiki 侧是否已有该项目 (显式填 id 时防悬空引用)。"""
+    import httpx
+
+    from ..config import get_settings
+
+    s = get_settings()
+    try:
+        async with httpx.AsyncClient(timeout=15.0, trust_env=False) as c:
+            r = await c.get(f"{s.wiki_base}/api/v1/projects")
+        if r.status_code != 200:
+            return False
+        data = r.json()
+        projects = (data.get("data") or {}).get("projects") or data.get("projects") or []
+        return any(str(p.get("id", "")) == wiki_project_id for p in projects)
+    except Exception:
+        return False
+
+
 async def _sync_wiki_project(
     p: ProjectCreate,
 ) -> str:
@@ -100,6 +119,30 @@ async def create_project(p: ProjectCreate) -> dict:
         if synced:
             wiki_project_id = synced
             wiki_synced = True
+    elif p.wiki_project_id and p.wiki_sync:
+        # 显式填 id = 手动桥接: 校验 llm-wiki 侧存在, 防悬空引用。
+        # 之前静默跳过同步, 内网实调: 一填 id 就同步不到 llm-wiki
+        # (mae/enodeb 谜案根因)。
+        if not await _wiki_project_exists(p.wiki_project_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"wiki_project_id {p.wiki_project_id} 在 llm-wiki 不存在; "
+                       "留空会自动同步创建 (不要手填)",
+            )
+
+    rag_workdir = ""
+    if p.rag_workdir:
+        wd = Path(p.rag_workdir)
+        if not wd.is_absolute():
+            raise HTTPException(
+                status_code=400,
+                detail=f"rag_workdir 必须是绝对路径 (相对路径会落到容器 CWD): {p.rag_workdir}",
+            )
+        try:
+            wd.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise HTTPException(status_code=400, detail=f"rag_workdir 无法创建: {e}")
+        rag_workdir = str(wd.resolve())
 
     async with session_scope() as s:
         row = await s.get(Project, p.id)
@@ -108,7 +151,7 @@ async def create_project(p: ProjectCreate) -> dict:
         s.add(Project(
             id=p.id, path=str(Path(p.path).resolve()),
             wiki_project_id=wiki_project_id,
-            rag_workdir=p.rag_workdir,
+            rag_workdir=rag_workdir,
             related_projects=p.related_projects,
             wiki_base=p.wiki_base, alias_mode=p.alias_mode,
             rag_language=p.rag_language,
