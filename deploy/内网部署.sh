@@ -91,6 +91,7 @@ docker run -d --name crucible-app --restart unless-stopped \
   -e "CRUCIBLE_WIKI_BASE=http://host.docker.internal:19828" \
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" \
   -e "CRUCIBLE_LLM_BASE=$LLM_BASE" -e "CRUCIBLE_LLM_API_KEY=$LLM_API_KEY" -e "CRUCIBLE_LLM_MODEL=$LLM_MODEL" \
+  -e "CRUCIBLE_EMBED_MODEL=BAAI/bge-m3" -e "CRUCIBLE_EMBED_DIM=1024" \
   -v "$DATA_ROOT:/data" \
   -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
   -v "$HOME/.cache/tiktoken:/root/.cache/tiktoken" \
