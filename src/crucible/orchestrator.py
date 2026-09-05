@@ -222,7 +222,7 @@ class FusionOrchestrator:
             return
 
         compared = await m2_consistency.compare_mechanism(
-            wiki_claim=(wiki_top.title + (f": {wiki_top.snippet}" if wiki_top else "")),
+            wiki_claim=(f"{wiki_top.title}: {wiki_top.snippet}" if wiki_top else ""),
             wiki_source=wiki_top.path if wiki_top else "",
             rag_claim=rag_answer[:600],
             rag_source="lightrag",
