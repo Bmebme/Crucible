@@ -88,9 +88,7 @@ echo "  docreader: $(curl -s http://localhost:8081/health | python3 -c 'import j
 
 echo ""
 echo "部署完成。接下来:"
-echo "  1. llm-wiki 建项目: 开 http://localhost:19828 → New Project → 路径 /projects/<产品名>"
-echo "     (项目目录必须含 schema.md, 从现有项目复制)"
-echo "  2. 拿项目稳定 id: curl http://localhost:19828/api/v1/projects (uuid, 勿用 current)"
-echo "  3. crucible 注册项目:"
-echo "     curl -X POST http://localhost:8080/projects -H 'Content-Type: application/json' -d '{\"id\":\"<产品名>\",\"path\":\"/data/<产品名>\",\"wiki_project_id\":\"<uuid>\",\"rag_workdir\":\"/data/<产品名>/.lightrag\"}'"
-echo "  4. 打开融合台: http://localhost:8080 (上传文档走 MinerU 双通道)"
+echo "  1. crucible 注册项目 (wiki_sync 默认开: 自动在 llm-wiki 建项目+模板+回填 uuid):"
+echo "     curl -X POST http://localhost:8080/projects -H 'Content-Type: application/json' -d '{\"id\":\"<产品名>\",\"path\":\"/data/<产品名>\",\"rag_workdir\":\"/data/<产品名>/.lightrag\"}'"
+echo "     (目录不存在时由 llm-wiki 自动创建 schema.md 等模板; 父目录即 DATA_ROOT)"
+echo "  2. 打开融合台: http://localhost:8080 (上传文档走 MinerU 双通道)"
