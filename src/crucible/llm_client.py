@@ -92,4 +92,8 @@ async def chat_complete(
         "llm call: model=%s (%.1fs, %d chars)",
         config.llm_model, time.monotonic() - t0, len(content),
     )
+    if response_format:
+        # 结构化输出 (实体抽取等) 格式漂移排障: 记开头供对照
+        # (内网实调: 模型输出旧版 8 字段格式 → 1.5.7 解析 4 字段拒绝)
+        logger.info("llm structured head: %s", content[:300])
     return content
