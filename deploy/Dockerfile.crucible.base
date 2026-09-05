@@ -26,9 +26,15 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' \
     && rm -rf /var/lib/apt/lists/*
 
 # 依赖层: 变更极少, 摆渡一次; 代码变更只重建应用薄层
+# torch CPU wheel 单文件进构建上下文: pytorch 索引会把 torch 的依赖包
+# 重定向到 files.pythonhosted.org, 该 host 超时高发 (两次构建实测死在这)
+# → 主 wheel 本地安装, 依赖走 PIP_INDEX_URL (清华源) 稳定
+# 下载: curl -L --retry 10 -o .hf-bake/torch-2.14.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl \
+#   "https://download.pytorch.org/whl/cpu/torch-2.14.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl"
+COPY .hf-bake/torch-2.14.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl /srv/
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --timeout 120 --retries 8 \
-        --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" \
+        /srv/torch-2.14.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl \
     && pip install --no-cache-dir --timeout 120 --retries 8 \
         lightrag-hku>=1.5.0 sentence-transformers>=3.0 \
         fastapi>=0.115 uvicorn>=0.30 "sqlalchemy[asyncio]>=2.0" asyncpg>=0.29 \
