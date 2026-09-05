@@ -12,6 +12,7 @@ $LLM_WIKI_STATE = "D:\kb-state"     # llm-wiki 状态目录 (app-state 等)
 $PG_HOST    = "host.docker.internal" # postgres 地址 (容器内视角)
 $PG_URL     = "postgresql+asyncpg://crucible:crucible@${PG_HOST}:5432/crucible"
 $PIP_SOURCE = ""   # 内网 pip 源, 空=不覆盖
+$PIP_TRUSTED_HOST = ""  # 内源是 http 时必填主机名
 # ==================================================
 
 $ErrorActionPreference = "Stop"
@@ -57,7 +58,9 @@ docker run -d --name crucible-docreader --restart unless-stopped -p 8081:8081 `
 Write-Host "[5/6] 启动 crucible 融合服务" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path "$DATA_ROOT" | Out-Null
 docker rm -f crucible-app 2>$null
-$pipArg = if ($PIP_SOURCE) { @("-e", "PIP_INDEX_URL=$PIP_SOURCE") } else { @() }
+$pipArg = @()
+if ($PIP_SOURCE) { $pipArg += @("-e", "PIP_INDEX_URL=$PIP_SOURCE") }
+if ($PIP_TRUSTED_HOST) { $pipArg += @("-e", "PIP_TRUSTED_HOST=$PIP_TRUSTED_HOST") }
 docker run -d --name crucible-app --restart unless-stopped `
   -p 8080:8080 `
   @pipArg `

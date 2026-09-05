@@ -14,6 +14,7 @@ LLM_WIKI_STATE="/home/$USER/kb-state" # llm-wiki 状态目录
 PG_HOST="host.docker.internal"        # postgres 地址 (容器内视角)
 PG_URL="postgresql+asyncpg://crucible:crucible@${PG_HOST}:5432/crucible"
 PIP_SOURCE=""      # 内网 pip 源 (如 http://<nexus>/repository/pypi-group/simple), 空=不覆盖
+PIP_TRUSTED_HOST=""  # 内源是 http 时必须填主机名 (pip 默认拒绝非 HTTPS)
 # ==================================================
 
 echo "[1/6] 加载镜像"
@@ -75,6 +76,7 @@ docker run -d --name crucible-app --restart unless-stopped \
   --add-host=host.docker.internal:host-gateway \
   -p 8080:8080 \
   ${PIP_SOURCE:+-e "PIP_INDEX_URL=$PIP_SOURCE"} \
+  ${PIP_TRUSTED_HOST:+-e "PIP_TRUSTED_HOST=$PIP_TRUSTED_HOST"} \
   -e "CRUCIBLE_DATABASE_URL=$PG_URL" \
   -e "CRUCIBLE_WIKI_BASE=http://host.docker.internal:19828" \
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" \
