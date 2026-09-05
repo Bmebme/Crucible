@@ -9,6 +9,7 @@ LightRAG 的 local/hybrid 查询取结构化实体 JSON —— 内部 demo 版�
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -153,10 +154,16 @@ class RagEngine:
 
             from sentence_transformers import SentenceTransformer
 
-            st_model = SentenceTransformer(cfg.embed_model)
+            # 同步加载丢进线程池: SentenceTransformer() 是阻塞调用, 模型
+            # 未缓存时 HEAD 重试可阻塞分钟级, 直接调用会冻住 uvicorn
+            # 事件循环 → 全站不响应 (内网实调现象, /health 也打不进)
+            st_model = await asyncio.to_thread(SentenceTransformer, cfg.embed_model)
 
             async def embedding_func(texts: list[str]):
-                return st_model.encode(texts, normalize_embeddings=True)
+                # encode 同为阻塞调用 (CPU 上 m3 批次级秒), 一并丢线程池
+                return await asyncio.to_thread(
+                    st_model.encode, texts, normalize_embeddings=True
+                )
 
             self._rag = LightRAG(
                 working_dir=self._workdir,
