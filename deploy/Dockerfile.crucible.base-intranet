@@ -1,0 +1,52 @@
+# Crucible 基础镜像 — 内网自建版 (前置: 内源是 pypi 全量代理, 探针通过)
+# 与 Dockerfile.crucible.base 的区别:
+#   - pip 全部走内源 (build-arg 注入), 无国内镜像/官方源硬编码
+#   - 不烘焙嵌入模型: 内网用摆渡的 hf-cache.tar.gz (部署脚本自动解包
+#     挂载到 ~/.cache/huggingface, 配 HF_HUB_OFFLINE=1)
+#   - 注意: 内源 torch 一般是 CUDA 版 (镜像 +2GB 左右); 若内源有
+#     +cpu wheel 体积接近摆渡版
+#
+# 构建 (内网, 原生 amd64, 需先 docker load python 基础镜像):
+#   docker load -i python-slim-amd64.tar
+#   docker build \
+#     --build-arg PIP_INDEX_URL=http://<内源>/simple \
+#     --build-arg PIP_TRUSTED_HOST=<内源主机名> \
+#     --build-arg APT_MIRROR=deb.debian.org \
+#     -f deploy/Dockerfile.crucible.base-intranet -t crucible-base:amd64 .
+#   docker build -f deploy/Dockerfile.crucible -t deploy-crucible:amd64-cpu .
+FROM python:3.12-slim-amd64
+
+ARG PIP_INDEX_URL
+ARG PIP_TRUSTED_HOST
+ARG APT_MIRROR=deb.debian.org
+ENV PIP_INDEX_URL=${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+ENV PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST:-}
+
+WORKDIR /srv
+
+# 系统依赖: 仅 libgomp (torch 运行时); 全部 Python 依赖走 wheel, 无需编译工具链
+RUN sed -i "s|deb.debian.org|${APT_MIRROR}|g" \
+        /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources 2>/dev/null || true \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 依赖层: 摆渡一次; 代码变更只重建应用薄层 (Dockerfile.crucible)
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --timeout 120 --retries 8 "torch==2.14.0" \
+    && pip install --no-cache-dir --timeout 120 --retries 8 \
+        lightrag-hku>=1.5.0 sentence-transformers>=3.0 \
+        fastapi>=0.115 uvicorn>=0.30 "sqlalchemy[asyncio]>=2.0" asyncpg>=0.29 \
+        pydantic-settings>=2.3 python-multipart>=0.0.9 alembic>=1.13 greenlet \
+        httpx>=0.27 pydantic>=2.7 pyyaml>=6.0 "mcp<2" \
+        "openai<4,>=2" \
+    && true
+
+# 兜底: 基础镜像里带一份构建当日的代码 (内网没 git 仓库也能直接跑)
+COPY src ./src
+COPY backend ./backend
+COPY frontend/dist ./frontend/dist
+RUN pip install --no-cache-dir --no-deps -e .
+
+EXPOSE 8080
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "backend"]
