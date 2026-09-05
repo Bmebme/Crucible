@@ -123,6 +123,9 @@ else
   echo "  ⚠ 未找到 crucible 仓库, 用基础镜像直接运行"
   docker tag crucible-base:amd64 deploy-crucible:amd64-cpu
 fi
+# 注意: 不要挂载宿主 HF 缓存到 /root/.cache/huggingface —— 挂载会遮住
+# 烤进镜像的 bge 模型 (缓存探测 miss + HF_HUB_OFFLINE=1 → init 失败,
+# 内网实调踩坑)。tiktoken 未烘焙, 挂载保留。
 # --add-host host-gateway: host.docker.internal 在非 Docker Desktop
 # 环境 (原生 docker/部分 WSL 配置) 不解析, 显式映射到宿主机网关
 docker run -d --name crucible-app --restart unless-stopped \
@@ -135,7 +138,6 @@ docker run -d --name crucible-app --restart unless-stopped \
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" \
   -e "CRUCIBLE_LLM_BASE=$LLM_BASE" -e "CRUCIBLE_LLM_API_KEY=$LLM_API_KEY" -e "CRUCIBLE_LLM_MODEL=$LLM_MODEL" \
   -v "$DATA_ROOT:/data" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
   -v "$HOME/.cache/tiktoken:/root/.cache/tiktoken" \
   -e "HF_HUB_OFFLINE=1" \
   deploy-crucible:amd64-cpu
