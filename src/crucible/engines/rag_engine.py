@@ -176,6 +176,7 @@ class RagEngine:
                 if cfg.llm_api_key:
                     headers["Authorization"] = f"Bearer {cfg.llm_api_key}"
 
+                t0 = time.monotonic()
                 url = f"{cfg.llm_base.rstrip('/')}/chat/completions"
                 async with httpx.AsyncClient(timeout=600.0, trust_env=False) as c:
                     r = await c.post(url, headers=headers, json=payload)
@@ -216,6 +217,10 @@ class RagEngine:
                         content = re.sub(
                             r"^\s*```[a-zA-Z]*\s*|\s*```\s*$", "", content
                         ).strip()
+                    logger.info(
+                        "llm call: model=%s (%.1fs, %d chars)",
+                        cfg.llm_model, time.monotonic() - t0, len(content),
+                    )
                     return content
 
             # 模型已缓存: 关闭 hub 在线探测 (hf-mirror 抖动时 HEAD 重试会阻塞分钟级)
@@ -326,12 +331,14 @@ class RagEngine:
         if not await self.ensure_ready(project_path):
             return ""
         try:
+            t0 = time.monotonic()
             result = await self._rag.aquery(
                 text,
                 param=self._QueryParam(
                     mode=mode, enable_rerank=False, include_references=True
                 ),
             )
+            logger.info("rag query ok: mode=%s (%.1fs)", mode, time.monotonic() - t0)
             return str(result)
         except Exception as e:
             logger.warning("rag query failed: %s", e)
