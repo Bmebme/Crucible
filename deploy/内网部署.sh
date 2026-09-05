@@ -99,7 +99,8 @@ docker rm -f crucible-app 2>/dev/null || true
 # 薄层失败则退回基础镜像 (内含构建当日的代码, 功能可用只是旧一些)
 if [ -n "$REPO_DIR" ]; then
   cd "$REPO_DIR"
-  if docker build -f deploy/Dockerfile.crucible -t deploy-crucible:amd64-cpu . >/dev/null 2>&1; then
+  # 构建输出不再吞掉: 卡住时能直接看到卡在哪一步 (内网排障实测)
+  if docker build -f deploy/Dockerfile.crucible -t deploy-crucible:amd64-cpu .; then
     echo "  ✓ crucible 薄层构建完成 (最新代码)"
   else
     echo "  ⚠ 薄层构建失败, 用基础镜像直接运行 (代码为摆渡当日版本)"
