@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -24,6 +25,8 @@ from pathlib import Path
 from ..db import session_scope
 from ..models import IngestionJob
 from .engines import get_rag
+
+logger = logging.getLogger("crucible.ingestion")
 
 ALLOWED_EXT = {".md", ".txt"}
 # 二进制格式: docreader 转换 (MinerU/markitdown) → md 后走统一源
@@ -72,6 +75,7 @@ async def run_ingestion(
     filename: str,
     content: bytes,
     subdir: str = "",
+    wiki_project_id: str = "",
 ) -> None:
     """摄入管线 (由端点以 BackgroundTasks 异步执行; 全程阶段可见)。"""
     ext = Path(filename).suffix.lower()
@@ -144,6 +148,17 @@ async def run_ingestion(
         stages = await _set_phase(job_id, "sourced", stages, source_path=source_rel)
         await _update_job(job_id, wiki_path=source_rel)
 
+        # 2.5 触发 llm-wiki ingest: wiki 是知识层, 原材料在 raw/sources,
+        #     知识页由 llm-wiki 的管线 (LLM 抽取) 生成进 wiki 树 ——
+        #     crucible 只写源 + 触发, 不直接塞 wiki (M1 搜的是生成知识页)
+        wiki_note = "skipped (verification)"
+        if subdir != "verification":
+            wiki_note = await _enqueue_wiki_ingest(wiki_project_id, source_rel)
+        if wiki_note.startswith(("ok", "skip")):
+            logger.info("wiki ingest enqueue: %s (%s)", source_rel, wiki_note)
+        else:
+            logger.warning("wiki ingest enqueue FAILED: %s (%s)", source_rel, wiki_note)
+
         # 3. 通道 B: rag 摄入 (纯文本; source_name 写入 reference 列表供引用层锚定)
         stages = await _set_phase(job_id, "rag_ingesting", stages)
         rag = await get_rag(project_path)
@@ -157,10 +172,38 @@ async def run_ingestion(
             detail={"stages": {**stages, "done": _now()},
                     "chars": len(text), "channels": ["source", "rag"],
                     "source_path": source_rel,
-                    "raw_path": originals_rel},
+                    "raw_path": originals_rel,
+                    "wiki_ingest": wiki_note},
         )
     except Exception as e:
         await _fail(str(e))
+
+
+async def _enqueue_wiki_ingest(wiki_project_id: str, source_path: str) -> str:
+    """触发 llm-wiki ingest 管线消费统一源 (LLM 生成知识页进 wiki 树)。
+
+    返回 "ok" / "ok (n tasks)" / "skip (...)" / "failed (...)"。
+    """
+    from ..config import get_settings
+
+    base = get_settings().wiki_base
+    if not base:
+        return "skip (wiki_base 未配置)"
+    if not wiki_project_id:
+        return "skip (项目未同步 wiki_project_id)"
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=30.0, trust_env=False) as c:
+            resp = await c.post(
+                f"{base}/api/v1/projects/{wiki_project_id}/ingest/enqueue",
+                json={"paths": [source_path]},
+            )
+        if resp.status_code != 200:
+            return f"failed (HTTP {resp.status_code})"
+        return "ok"
+    except Exception as e:
+        return f"failed: {e}"
 
 
 async def _convert_via_docreader(

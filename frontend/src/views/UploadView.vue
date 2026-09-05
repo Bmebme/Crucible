@@ -24,9 +24,9 @@
         <div class="el-upload__text">拖拽文件到这里，或 <em>点击选择</em></div>
         <template #tip>
           <div class="el-upload__tip">
-            统一源: 原件存 raw/originals, MinerU 标准化 md 进 raw/sources
-            (RAG 与 llm-wiki 搜索共用)。pdf/docx 经 MinerU 解析 (CPU 上分钟级),
-            任务卡片实时显示阶段。验证记录请选 verification 子目录。
+            统一源: 原件存 raw/originals, MinerU 标准化 md 进 raw/sources,
+            并触发 llm-wiki 生成知识页 (wiki 层)。pdf/docx 经 MinerU 解析
+            (CPU 上分钟级), 任务卡片实时显示阶段。验证记录选 verification。
           </div>
         </template>
       </el-upload>

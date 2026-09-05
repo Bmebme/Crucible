@@ -38,6 +38,7 @@ async def upload_document(
     subdir: str = Form(""),
 ) -> dict:
     filename = file.filename or "unnamed.md"
+    proj = await get_project(project_id)
     project_path = await get_project_path(project_id)
     content = await file.read()
     if not content:
@@ -50,6 +51,7 @@ async def upload_document(
     background_tasks.add_task(
         run_ingestion,
         started["job_id"], project_id, project_path, filename, content, subdir,
+        proj.wiki_project_id or "",
     )
     return {
         "ok": True,
