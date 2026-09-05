@@ -85,7 +85,9 @@ docker run -d --name crucible-app --restart unless-stopped `
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" `
   -e "CRUCIBLE_LLM_BASE=$LLM_BASE" -e "CRUCIBLE_LLM_API_KEY=$LLM_API_KEY" -e "CRUCIBLE_LLM_MODEL=$LLM_MODEL" `
   -e "HF_HUB_OFFLINE=1" `
+  -e "TIKTOKEN_CACHE_DIR=/root/.cache/tiktoken" `
   -v "${DATA_ROOT}:/data" `
+  -v "$env:USERPROFILE/.cache/tiktoken:/root/.cache/tiktoken" `
   deploy-crucible:amd64-cpu | Out-Null
 
 Write-Host "[6/6] 健康检查" -ForegroundColor Cyan

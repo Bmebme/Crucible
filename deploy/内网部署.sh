@@ -140,6 +140,7 @@ docker run -d --name crucible-app --restart unless-stopped \
   -v "$DATA_ROOT:/data" \
   -v "$HOME/.cache/tiktoken:/root/.cache/tiktoken" \
   -e "HF_HUB_OFFLINE=1" \
+  -e "TIKTOKEN_CACHE_DIR=/root/.cache/tiktoken" \
   deploy-crucible:amd64-cpu
 
 echo "[6/6] 健康检查"
