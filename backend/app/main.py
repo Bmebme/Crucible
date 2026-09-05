@@ -108,4 +108,21 @@ except ImportError:
 # 前端静态资源 (P4 构建产物; 未构建时目录不存在, 忽略)
 _static = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if _static.exists():
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        """SPA history 路由回退: 刷新 /upload 等前端路径时浏览器直接向
+        后端要该路径, 静态挂载只认真实文件 → 404。未知路径回退到
+        index.html 由 Vue Router 接管 (内网实调: 刷新页面 Not Found)。"""
+        candidate = (_static / full_path).resolve()
+        try:
+            candidate.relative_to(_static.resolve())
+            is_inside = True
+        except ValueError:
+            is_inside = False
+        if is_inside and full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_static / "index.html")
+
     app.mount("/", StaticFiles(directory=str(_static), html=True), name="frontend")
