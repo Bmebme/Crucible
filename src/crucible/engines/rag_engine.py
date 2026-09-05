@@ -167,6 +167,11 @@ class RagEngine:
 
                 payload: dict = {"model": cfg.llm_model, "messages": messages,
                                  "stream": True}
+                # 结构化请求优先转发 response_format (json_object 对实体抽取
+                # 质量关键); 网关不支持 (400) 时去掉重试一次
+                use_rf = bool(kwargs.get("response_format"))
+                if use_rf:
+                    payload["response_format"] = kwargs["response_format"]
                 headers = {"Content-Type": "application/json"}
                 if cfg.llm_api_key:
                     headers["Authorization"] = f"Bearer {cfg.llm_api_key}"
@@ -174,6 +179,9 @@ class RagEngine:
                 url = f"{cfg.llm_base.rstrip('/')}/chat/completions"
                 async with httpx.AsyncClient(timeout=600.0, trust_env=False) as c:
                     r = await c.post(url, headers=headers, json=payload)
+                    if r.status_code == 400 and use_rf:
+                        payload.pop("response_format", None)
+                        r = await c.post(url, headers=headers, json=payload)
                     r.raise_for_status()
                     ct = r.headers.get("content-type", "")
                     text = r.text
@@ -195,13 +203,20 @@ class RagEngine:
                                 delta = choices[0].get("delta") or {}
                                 if delta.get("content"):
                                     parts.append(delta["content"])
-                        return "".join(parts)
-                    # 非流式: 单 JSON
-                    obj = json.loads(text)
-                    choices = obj.get("choices") or []
-                    if not choices:
-                        raise ValueError(f"网关响应无 choices: {text[:200]}")
-                    return choices[0].get("message", {}).get("content", "") or ""
+                        content = "".join(parts)
+                    else:
+                        # 非流式: 单 JSON
+                        obj = json.loads(text)
+                        choices = obj.get("choices") or []
+                        if not choices:
+                            raise ValueError(f"网关响应无 choices: {text[:200]}")
+                        content = choices[0].get("message", {}).get("content", "") or ""
+                    # 剥 markdown 围栏 (部分模型即使给了 json_object 也爱包 ```json)
+                    if content.lstrip().startswith("```"):
+                        content = re.sub(
+                            r"^\s*```[a-zA-Z]*\s*|\s*```\s*$", "", content
+                        ).strip()
+                    return content
 
             # 模型已缓存: 关闭 hub 在线探测 (hf-mirror 抖动时 HEAD 重试会阻塞分钟级)
             if _model_is_cached(cfg.embed_model):
