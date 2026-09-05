@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
+import time
 from typing import Any
+
+logger = logging.getLogger("crucible.rag")
 
 # HuggingFace 直连不稳定 —— 走国内镜像 (与 llm_wiki 调试约定一致)
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
@@ -129,6 +133,11 @@ class RagEngine:
         if self._ready and self._workdir == self.config.rag_workdir_for(project_path):
             return True
         self._workdir = self.config.rag_workdir_for(project_path)
+        t0 = time.monotonic()
+        logger.info(
+            "rag init: workdir=%s model=%s dim=%s",
+            self._workdir, self.config.embed_model, self.config.embed_dim,
+        )
         try:
             from lightrag import LightRAG, QueryParam
             from lightrag.llm.openai import openai_complete_if_cache
@@ -149,8 +158,14 @@ class RagEngine:
 
             # 模型已缓存: 关闭 hub 在线探测 (hf-mirror 抖动时 HEAD 重试会阻塞分钟级)
             if _model_is_cached(cfg.embed_model):
+                logger.info("embed model %s 命中本地缓存 → 离线加载", cfg.embed_model)
                 os.environ.setdefault("HF_HUB_OFFLINE", "1")
                 _prefer_offline_hub()
+            else:
+                logger.warning(
+                    "embed model %s 不在本地缓存 (offline=%s) → 将访问网络, 内网会重试阻塞",
+                    cfg.embed_model, os.environ.get("HF_HUB_OFFLINE"),
+                )
 
             from sentence_transformers import SentenceTransformer
 
@@ -158,6 +173,7 @@ class RagEngine:
             # 未缓存时 HEAD 重试可阻塞分钟级, 直接调用会冻住 uvicorn
             # 事件循环 → 全站不响应 (内网实调现象, /health 也打不进)
             st_model = await asyncio.to_thread(SentenceTransformer, cfg.embed_model)
+            logger.info("sentence-transformer loaded (%.1fs)", time.monotonic() - t0)
 
             async def embedding_func(texts: list[str]):
                 # encode 同为阻塞调用 (CPU 上 m3 批次级秒), 一并丢线程池
@@ -185,8 +201,13 @@ class RagEngine:
             await self._rag.initialize_storages()
             self._QueryParam = QueryParam
             self._ready = True
+            logger.info("rag ready (total %.1fs)", time.monotonic() - t0)
             return True
         except Exception:
+            logger.exception(
+                "rag init FAILED: workdir=%s model=%s (%.1fs)",
+                self._workdir, self.config.embed_model, time.monotonic() - t0,
+            )
             self._ready = False
             return False
 
@@ -209,7 +230,8 @@ class RagEngine:
                     top_k=400,
                 ),
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("entity enumerate failed: %s", e)
             return []
         entities: list[RagEntity] = []
         seen: set[str] = set()
@@ -235,7 +257,8 @@ class RagEngine:
                 ),
             )
             return str(result)
-        except Exception:
+        except Exception as e:
+            logger.warning("rag query failed: %s", e)
             return ""
 
     async def query_context(
@@ -254,7 +277,8 @@ class RagEngine:
                     top_k=top_k,
                 ),
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("rag context query failed: %s", e)
             return []
         return parse_context_chunks(str(raw))
 
@@ -265,9 +289,15 @@ class RagEngine:
         if not await self.ensure_ready(project_path):
             return False
         try:
+            t0 = time.monotonic()
             await self._rag.ainsert(
                 text, file_paths=[source_name] if source_name else None
             )
+            logger.info(
+                "rag ingest ok: %s (%d chars, %.1fs)",
+                source_name or "-", len(text), time.monotonic() - t0,
+            )
             return True
         except Exception:
+            logger.exception("rag ingest FAILED: %s", source_name or "-")
             return False
