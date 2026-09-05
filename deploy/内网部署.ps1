@@ -11,6 +11,7 @@ $DATA_ROOT  = "D:\kb-data"          # 项目数据目录 (llm-wiki 与 crucible 
 $LLM_WIKI_STATE = "D:\kb-state"     # llm-wiki 状态目录 (app-state 等)
 $PG_HOST    = "host.docker.internal" # postgres 地址 (容器内视角)
 $PG_URL     = "postgresql+asyncpg://crucible:crucible@${PG_HOST}:5432/crucible"
+$PIP_SOURCE = ""   # 内网 pip 源, 空=不覆盖
 # ==================================================
 
 $ErrorActionPreference = "Stop"
@@ -58,6 +59,7 @@ New-Item -ItemType Directory -Force -Path "$DATA_ROOT" | Out-Null
 docker rm -f crucible-app 2>$null
 docker run -d --name crucible-app --restart unless-stopped `
   -p 8080:8080 `
+  $(if ($PIP_SOURCE) { "-e `"PIP_INDEX_URL=$PIP_SOURCE`"" }) `
   -e "CRUCIBLE_DATABASE_URL=$PG_URL" `
   -e "CRUCIBLE_WIKI_BASE=http://host.docker.internal:19828" `
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" `
