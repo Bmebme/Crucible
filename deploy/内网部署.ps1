@@ -20,14 +20,14 @@ foreach ($t in @("py-llm-wiki-amd64.tar", "crucible-cpu.tar", "docreader-final.t
 }
 # postgres: 有 tar 用 tar, 没有则从内网 registry 拉
 if (Test-Path "postgres-amd64.tar") { docker load -i postgres-amd64.tar }
-else { Write-Host "  ⚠ 未找到 postgres-amd64.tar, 假设内网 registry 已有 postgres:16-alpine 或手动 load" -ForegroundColor Yellow }
+else { Write-Host "  ⚠ 未找到 postgres-amd64.tar, 假设内网 registry 已有 postgres:16-alpine-amd64 或手动 load" -ForegroundColor Yellow }
 
 Write-Host "[2/6] 启动 postgres" -ForegroundColor Cyan
 docker rm -f crucible-pg 2>$null
 docker run -d --name crucible-pg --restart unless-stopped `
   -e POSTGRES_USER=crucible -e POSTGRES_PASSWORD=crucible -e POSTGRES_DB=crucible `
   -p 5432:5432 -v crucible-pg-data:/var/lib/postgresql/data `
-  postgres:16-alpine | Out-Null
+  postgres:16-alpine-amd64 | Out-Null
 
 Write-Host "[3/6] 启动 llm-wiki (含 UI, 同端口 19828)" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $LLM_WIKI_STATE | Out-Null

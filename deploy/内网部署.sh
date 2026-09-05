@@ -25,7 +25,7 @@ echo "[2/6] 启动 postgres"
 docker rm -f crucible-pg 2>/dev/null || true
 docker run -d --name crucible-pg --restart unless-stopped \
   -e POSTGRES_USER=crucible -e POSTGRES_PASSWORD=crucible -e POSTGRES_DB=crucible \
-  -p 5432:5432 -v crucible-pg-data:/var/lib/postgresql/data postgres:16-alpine
+  -p 5432:5432 -v crucible-pg-data:/var/lib/postgresql/data postgres:16-alpine-amd64
 
 echo "[3/6] 启动 llm-wiki (含 UI, 同端口 19828)"
 mkdir -p "$LLM_WIKI_STATE"
