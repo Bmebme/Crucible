@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import time
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("crucible.rag")
@@ -128,6 +129,7 @@ class RagEngine:
         self._rag: Any = None
         self._ready = False
         self._workdir = ""
+        self._retried = False
 
     async def ensure_ready(self, project_path: str) -> bool:
         if self._ready and self._workdir == self.config.rag_workdir_for(project_path):
@@ -208,6 +210,20 @@ class RagEngine:
                 "rag init FAILED: workdir=%s model=%s (%.1fs)",
                 self._workdir, self.config.embed_model, time.monotonic() - t0,
             )
+            # 自愈: 旧版本/坏索引写出的存量工作目录会导致存储初始化失败
+            # (内网实调: 旧镜像旧 lightrag 留下的 .lightrag 半成品)。
+            # 索引是派生数据, 移走重建即可, wiki 原文不受影响。
+            if not self._retried and Path(self._workdir).exists():
+                self._retried = True
+                bak = Path(f"{self._workdir}.bak-{int(time.time())}")
+                try:
+                    Path(self._workdir).rename(bak)
+                    logger.warning(
+                        "rag workdir 疑似损坏, 已移走 (%s), 重建重试", bak
+                    )
+                    return await self.ensure_ready(project_path)
+                except Exception:
+                    logger.exception("rag workdir 移走失败: %s", self._workdir)
             self._ready = False
             return False
 
