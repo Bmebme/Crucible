@@ -47,10 +47,16 @@ docker run -d --name crucible-llmwiki --restart unless-stopped \
   -e "LLM_WIKI_LLM_BASE=$LLM_BASE" -e "LLM_WIKI_LLM_API_KEY=$LLM_API_KEY" -e "LLM_WIKI_LLM_MODEL=$LLM_MODEL" \
   py-llm-wiki:amd64
 
-echo "[4/6] 启动 docreader (MinerU)"
+echo "[4/6] 启动 docreader (MinerU: 根镜像 + 薄应用层)"
+# 根镜像已在 [1/6] 加载 (tar 内含 docreader-base:amd64); 应用层从代码秒级构建
+if [ -f ../deploy/Dockerfile.docreader ]; then
+  cd ..
+  docker build -f deploy/Dockerfile.docreader -t docreader-app:latest .
+  cd - > /dev/null
+fi
 docker rm -f crucible-docreader 2>/dev/null || true
 docker run -d --name crucible-docreader --restart unless-stopped -p 8081:8081 \
-  deploy-docreader:amd64-squashed
+  docreader-app:latest
 
 echo "[5/6] 启动 crucible 融合服务"
 mkdir -p "$DATA_ROOT"
