@@ -52,6 +52,9 @@ async def _sync_wiki_project(
     s = get_settings()
     name = Path(p.path).name
     wiki_path = f"{s.llm_wiki_projects_root}/{name}"
+    import logging as _l
+
+    _log = _l.getLogger("crucible")
     try:
         async with httpx.AsyncClient(timeout=60.0, trust_env=False) as c:
             r = await c.post(
@@ -62,6 +65,7 @@ async def _sync_wiki_project(
                 # 目录已存在 (可能是预先放好数据的场景): 走 open
                 pass
             elif r.status_code != 200:
+                _log.warning("wiki_sync create 失败: status=%s body=%s", r.status_code, r.text[:200])
                 return ""
             r2 = await c.post(
                 f"{s.wiki_base}/api/v1/projects/open",
@@ -70,7 +74,9 @@ async def _sync_wiki_project(
             data = r2.json()
             if data.get("ok"):
                 return str(data.get("id", ""))
-    except Exception:
+            _log.warning("wiki_sync open 失败: body=%s", str(data)[:200])
+    except Exception as e:
+        _log.warning("wiki_sync 异常: %s", e)
         return ""
     return ""
 
