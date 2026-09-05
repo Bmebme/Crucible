@@ -23,6 +23,16 @@ for t in py-llm-wiki-amd64.tar crucible-cpu.tar docreader-final.tar; do
 done
 if [ -f postgres-amd64.tar ]; then docker load -i postgres-amd64.tar; fi
 
+# 模型缓存 (bge 嵌入 + tiktoken): 解到宿主机缓存, crucible 挂载使用
+if [ -f hf-cache.tar.gz ]; then
+  mkdir -p "$HOME/.cache/huggingface/hub"
+  tar xzf hf-cache.tar.gz -C "$HOME/.cache/huggingface/hub" && echo "  ✓ bge 模型缓存已解包"
+fi
+if [ -f tiktoken-cache.tar.gz ]; then
+  mkdir -p "$HOME/.cache/tiktoken"
+  tar xzf tiktoken-cache.tar.gz -C "$HOME/.cache/tiktoken" && echo "  ✓ tiktoken 缓存已解包"
+fi
+
 echo "[2/6] 启动 postgres"
 docker rm -f crucible-pg 2>/dev/null || true
 docker run -d --name crucible-pg --restart unless-stopped \
@@ -82,6 +92,9 @@ docker run -d --name crucible-app --restart unless-stopped \
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" \
   -e "CRUCIBLE_LLM_BASE=$LLM_BASE" -e "CRUCIBLE_LLM_API_KEY=$LLM_API_KEY" -e "CRUCIBLE_LLM_MODEL=$LLM_MODEL" \
   -v "$DATA_ROOT:/data" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  -v "$HOME/.cache/tiktoken:/root/.cache/tiktoken" \
+  -e "HF_HUB_OFFLINE=1" \
   deploy-crucible:amd64-cpu
 
 echo "[6/6] 健康检查"
