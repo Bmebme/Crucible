@@ -19,8 +19,7 @@ echo "[1/6] 加载镜像"
 for t in py-llm-wiki-amd64.tar crucible-cpu.tar docreader-final.tar; do
   if [ -f "$t" ]; then docker load -i "$t"; else echo "  ⚠ 缺少 $t (跳过)"; fi
 done
-if [ -f postgres-amd64.tar ]; then docker load -i postgres-amd64.tar
-else echo "  ⚠ 未找到 postgres-amd64.tar, 假设已有 postgres:16-alpine 镜像"; fi
+if [ -f postgres-amd64.tar ]; then docker load -i postgres-amd64.tar; fi
 
 echo "[2/6] 启动 postgres"
 docker rm -f crucible-pg 2>/dev/null || true
@@ -49,10 +48,18 @@ docker run -d --name crucible-llmwiki --restart unless-stopped \
 
 echo "[4/6] 启动 docreader (MinerU: 根镜像 + 薄应用层)"
 # 根镜像已在 [1/6] 加载 (tar 内含 docreader-base:amd64); 应用层从代码秒级构建
-if [ -f ../deploy/Dockerfile.docreader ]; then
-  cd ..
+# 布局约定: 本摆渡目录与 crucible 仓库同级 (如 ~/deploy-bundle 与 ~/crucible)
+REPO_DIR=""
+for cand in "../crucible" "../Crucible" ".."; do
+  if [ -f "$cand/deploy/Dockerfile.docreader" ]; then REPO_DIR="$cand"; break; fi
+done
+if [ -n "$REPO_DIR" ]; then
+  cd "$REPO_DIR"
   docker build -f deploy/Dockerfile.docreader -t docreader-app:latest .
   cd - > /dev/null
+else
+  echo "  ⚠ 未找到 crucible 仓库 (docreader 薄层), 直接用根镜像运行"
+  docker tag docreader-base:amd64 docreader-app:latest
 fi
 docker rm -f crucible-docreader 2>/dev/null || true
 docker run -d --name crucible-docreader --restart unless-stopped -p 8081:8081 \
