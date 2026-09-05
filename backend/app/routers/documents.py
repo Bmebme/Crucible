@@ -1,12 +1,21 @@
-"""文档上传端点 (md/txt 双通道, P3a) + 页面原文代理 (引用层 P2)。"""
+"""文档上传端点 (md/txt 双通道, P3a) + 页面原文代理 (引用层 P2)。
+
+上传异步化: POST 立即建任务返回 job_id, 管线经 BackgroundTasks 执行,
+前端轮询 GET /documents 看阶段 (detail.stages 各阶段时间戳)。
+"""
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
 from ..repos import get_project, get_project_path
 from ..services.engines import get_wiki
-from ..services.ingestion import ingest_document, list_jobs
+from ..services.ingestion import (
+    list_jobs,
+    run_ingestion,
+    start_ingestion,
+    validate_upload,
+)
 
 router = APIRouter(prefix="/projects", tags=["documents"])
 
@@ -24,18 +33,29 @@ async def page_content(project_id: str, path: str) -> dict:
 @router.post("/{project_id}/documents")
 async def upload_document(
     project_id: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     subdir: str = Form(""),
 ) -> dict:
+    filename = file.filename or "unnamed.md"
     project_path = await get_project_path(project_id)
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="空文件")
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="文件超过 10MB 限制")
-    return await ingest_document(
-        project_id, project_path, file.filename or "unnamed.md", content, subdir=subdir
+    err = validate_upload(filename, content)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    started = await start_ingestion(project_id, filename)
+    background_tasks.add_task(
+        run_ingestion,
+        started["job_id"], project_id, project_path, filename, content, subdir,
     )
+    return {
+        "ok": True,
+        "job_id": started["job_id"],
+        "message": "任务已接收; 轮询 GET /projects/{id}/documents 查看阶段",
+    }
 
 
 @router.get("/{project_id}/documents")

@@ -43,15 +43,22 @@ if (-not (Test-Path $appState)) {
 '@ | Out-File -Encoding utf8 $appState
     Write-Host "  → 已生成 $appState (项目注册见【注册项目】)" -ForegroundColor Yellow
 }
-# llmConfig 直接写进 app-state: deploy 参数是唯一事实源, UI 设置页读 state 而非 env
+# LLM 配置三件套: llmConfig (后端调用) + 自定义 preset (UI 设置页显示) + activePresetId
 $state = @{}
 if (Test-Path $appState) { $state = Get-Content $appState -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable }
+$presetId = "custom-crucible-deploy"
 $state["llmConfig"] = @{
-    provider = "custom"; apiMode = "chat_completions"
-    customEndpoint = $LLM_BASE; apiKey = $LLM_API_KEY; model = $LLM_MODEL
+    provider = "custom"; apiKey = $LLM_API_KEY; model = $LLM_MODEL
+    customEndpoint = $LLM_BASE; maxContextSize = 204800
 }
+$state["customLlmPresets"] = @(@{ id = $presetId; label = "Crucible 部署 (内网 LLM)" })
+$state["providerConfigs"] = @{ $presetId = @{
+    apiKey = $LLM_API_KEY; model = $LLM_MODEL; baseUrl = $LLM_BASE
+    apiMode = "chat_completions"; maxContextSize = 204800
+} }
+$state["activePresetId"] = $presetId
 $state | ConvertTo-Json -Depth 8 | Out-File -Encoding utf8 $appState
-Write-Host "  → llmConfig 已写入 $appState" -ForegroundColor Yellow
+Write-Host "  → llmConfig + 自定义 preset 已写入 $appState" -ForegroundColor Yellow
 docker rm -f crucible-llmwiki 2>$null
 docker run -d --name crucible-llmwiki --restart unless-stopped `
   -p 19828:19828 `

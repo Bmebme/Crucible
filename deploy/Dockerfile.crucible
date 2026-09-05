@@ -3,13 +3,15 @@
 #   docker load -i crucible-cpu.tar
 # 构建 (crucible 仓库根, 代码经 GitHub 同步):
 #   docker build -f deploy/Dockerfile.crucible -t deploy-crucible:amd64-cpu .
-# 注意: frontend/dist 是构建产物且被 gitignore, git 拉下的代码没有它
-# → 静态资源继承基础镜像里烧入的版本; 前端变更需重打基础镜像
+# 注意: frontend/dist 构建产物已入 git (内网无 npm registry, 前端更新
+# 唯一通道), 薄层随代码更新前端; 旧 clone 缺 dist 时 COPY 失败会退回
+# 基础镜像 (deploy 脚本兜底), 不影响可用性
 FROM crucible-base:amd64
 
 WORKDIR /srv
 COPY src ./src
 COPY backend ./backend
+COPY frontend/dist ./frontend/dist
 # --no-build-isolation: pyproject 无显式 build-system, pip 默认走隔离环境
 # 并从 PIP_INDEX_URL (清华源) 下载 setuptools —— 内网不可达, 重试超时
 # 分钟级 (薄层构建卡死根因)。镜像内已有 setuptools (torch 依赖带入)

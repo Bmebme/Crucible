@@ -51,8 +51,11 @@ if [ ! -f "$APPSTATE" ]; then
 EOF
   echo "  → 已生成 $APPSTATE (项目注册见文末指引)"
 fi
-# llmConfig 直接写进 app-state: deploy 参数是唯一事实源, UI 设置页读的是
-# state 而非 env —— 之前只靠镜像 env 覆盖, 界面显示空需手工填 (内网实调)
+# LLM 配置直接写进 app-state: deploy 参数是唯一事实源。设置页是 preset
+# 驱动的 (activePresetId=null 即"未配置", 表单读 customLlmPresets+
+# providerConfigs), 只写 llmConfig 会导致界面 custom 为空 (内网实调) →
+# 三件套一起注入: llmConfig (后端调用) + 自定义 preset (UI 显示) +
+# activePresetId (激活)。重跑部署会用 deploy 参数重置这三项 (预期行为)
 python3 - "$APPSTATE" "$LLM_BASE" "$LLM_API_KEY" "$LLM_MODEL" <<'PYEOF'
 import json, sys
 p, base, key, model = sys.argv[1:5]
@@ -61,10 +64,15 @@ try:
 except Exception:
     s = {}
 s.setdefault("apiConfig", {}).update({"allowUnauthenticated": True, "allowLanAccess": True})
-s["llmConfig"] = {"provider": "custom", "apiMode": "chat_completions",
-                  "customEndpoint": base, "apiKey": key, "model": model}
+preset_id = "custom-crucible-deploy"
+s["llmConfig"] = {"provider": "custom", "apiKey": key, "model": model,
+                  "customEndpoint": base, "maxContextSize": 204800}
+s["customLlmPresets"] = [{"id": preset_id, "label": "Crucible 部署 (内网 LLM)"}]
+s["providerConfigs"] = {preset_id: {"apiKey": key, "model": model, "baseUrl": base,
+                                    "apiMode": "chat_completions", "maxContextSize": 204800}}
+s["activePresetId"] = preset_id
 json.dump(s, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-print(f"  → llmConfig 已写入 {p}")
+print(f"  → llmConfig + 自定义 preset 已写入 {p}")
 PYEOF
 docker rm -f crucible-llmwiki 2>/dev/null || true
 docker run -d --name crucible-llmwiki --restart unless-stopped \

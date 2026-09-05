@@ -8,6 +8,12 @@ __pycache__/
 
 # deploy secrets
 deploy/.env
-frontend/dist/
 frontend/node_modules/
 backend/.venv/
+
+# frontend/dist 构建产物入 git: 内网无 npm registry, git pull + 薄层构建
+# 是前端更新的唯一通道 (薄层 COPY frontend/dist, 见 deploy/Dockerfile.crucible)
+!frontend/dist/
+
+# 镜像构建上下文 (模型缓存+torch wheel, 280MB, 不入 git)
+.hf-bake/
