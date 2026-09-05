@@ -46,6 +46,9 @@ RUN pip install --no-cache-dir --timeout 120 --retries 8 \
 # 嵌入模型烧入镜像 (bge-small-zh-v1.5 = 配置默认, 512 维):
 # 运行时 _model_is_cached 命中 → HF_HUB_OFFLINE → 零网络加载
 COPY .hf-bake/models--BAAI--bge-small-zh-v1.5 /root/.cache/huggingface/hub/models--BAAI--bge-small-zh-v1.5
+# 注意: tiktoken 编码缓存未烘焙 (LightRAG 构造器就会调 tiktoken) ——
+# 靠部署脚本挂载 ~/.cache/tiktoken + TIKTOKEN_CACHE_DIR env;
+# 下次重打基础镜像时可把 .hf-bake/tiktoken/ 一并 COPY 进来免挂载
 
 # 兜底: 基础镜像里带一份构建当日的代码 (内网没 git 仓库也能直接跑)
 COPY src ./src
