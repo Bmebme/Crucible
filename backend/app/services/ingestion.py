@@ -1,5 +1,6 @@
 """上传摄入管线 (md/txt 双通道, P3a)。
 
+原件存档:       <project>/raw/sources/<文件名> (证据链, 转换前原子写入)
 通道 A (wiki):  原子写入 <project>/wiki/ 子目录, llm-wiki daemon watcher 索引
 通道 B (rag):   RagEngine.ingest → LightRAG ainsert
 状态跟踪:       ingestion_jobs 表 (uploaded → wiki_indexed → rag_ingested → done)
@@ -49,6 +50,21 @@ async def ingest_document(
         job_id = job.id
 
     try:
+        # 1.2 原始文件存档 (对齐 py-llm-wiki raw/sources 约定):
+        #     证据链保留原件 —— MinerU 是转换不是归档, 解析产物丢 wiki 通道,
+        #     原件必须留档 (转换失败也不丢; 换解析器可重跑; 同名覆盖=最新为准)。
+        raw_dir = Path(project_path) / "raw" / "sources"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(raw_dir), suffix=Path(filename).suffix)
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(content)
+            os.replace(tmp, raw_dir / filename)
+        except Exception:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+
         # 1.5 二进制格式: docreader 转换 (MinerU/markitdown)
         convert_engine = ""
         if is_binary:
@@ -92,7 +108,9 @@ async def ingest_document(
             return {"ok": False, "job_id": job_id, "error": "rag 摄入失败"}
 
         await _update_job(
-            job_id, status="done", detail={"chars": len(text), "channels": ["wiki", "rag"]}
+            job_id, status="done",
+            detail={"chars": len(text), "channels": ["wiki", "rag"],
+                    "raw_path": f"raw/sources/{filename}"},
         )
         return {"ok": True, "job_id": job_id, "wiki_path": wiki_path}
     except Exception as e:
