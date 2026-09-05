@@ -9,6 +9,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -59,17 +60,26 @@ async def parse(file: UploadFile = File(...)) -> dict:
             for attempt in (1, 2):
                 out = Path(td) / "out"
                 try:
+                    t0 = time.monotonic()
                     proc = subprocess.run(
                         ["mineru", "-b", "pipeline", "-p", str(src), "-o", str(out)],
                         capture_output=True, text=True, timeout=2400,
                     )
+                    dt = time.monotonic() - t0
                     # 输出结构: out/<stem>/auto/<stem>.md (嵌套)
                     mds = list((out / src.stem).rglob("*.md")) if (out / src.stem).exists() else []
                     if proc.returncode == 0 and mds:
                         text = mds[0].read_text(encoding="utf-8")
                         engine = "mineru"
+                        logger.info("mineru ok: %s (%.0fs, %d chars)", src.name, dt, len(text))
                         break
-                    logger.warning("mineru attempt %s failed (rc=%s), 重试", attempt, proc.returncode)
+                    # stderr 留尾 15 行: mineru 自身日志进子进程 stderr,
+                    # 之前完全丢弃, 内网排障无从下手
+                    logger.warning(
+                        "mineru attempt %s failed (rc=%s, %.0fs); stderr tail:\n%s",
+                        attempt, proc.returncode, dt,
+                        "\n".join(proc.stderr.splitlines()[-15:]),
+                    )
                 except Exception as e:  # 超时/崩溃 → 兜底
                     logger.warning("mineru failed: %s", e)
                     break
