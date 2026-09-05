@@ -84,5 +84,5 @@ python lightrag/evaluation/eval_rag_quality.py \
 | 日期 | 环境 | 样本 | 结果 |
 |---|---|---|---|
 | 2026-09-04 | 本机 (arm64 模拟, 3 样本) | faithfulness 0.517 / answer_relevancy 0.935 | 口径未分流 |
-| 2026-09-04 | 本机 (24 样本分组) | 见 eval-24 结果 | 管道验收 |
+| 2026-09-04 | 本机 (20 样本分组, 管道验收) | Q2: faithfulness 0.229 / answer_relevancy 0.727; Q1: NaN (枚举口径); 5 样本失败 (容器重启打断) | 低分主因: harness 只取 conclusion + station rag 仅 2 文档 + 模拟环境; 口径已修, 数字非质量判决 |
 | 待内网 | 内网基线 | 20 题 | 部署后第 1 天跑 |
