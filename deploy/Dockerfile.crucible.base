@@ -1,12 +1,15 @@
-# Crucible 融合服务 (backend + frontend 静态资源) — 内网 CPU 摆渡版
-# 与仓库根 Dockerfile 的区别:
-#   - 基础镜像显式 amd64 (内网 x86_64 服务器; 构建机是 arm64, 走 buildx 模拟)
-#   - torch 走 pytorch CPU wheel 源 (无 CUDA, 镜像体积 -2GB+)
-#   - bge-small-zh-v1.5 嵌入模型烧入镜像 (内网离线, 免 HF 下载)
-# 构建 (Mac 上, 需 Docker Desktop buildx):
+# Crucible 基础镜像 (依赖层 + 嵌入模型) — 内网摆渡用, 一次到位
+# 应用层见 Dockerfile.crucible (内网从 git 代码秒级构建, 依赖此镜像)
+#
+# 构建 (Mac 上, Docker Desktop buildx, amd64 模拟):
 #   mkdir -p .hf-bake && cp -al ~/.cache/huggingface/hub/models--BAAI--bge-small-zh-v1.5 .hf-bake/
 #   docker buildx build --platform linux/amd64 --load \
-#     -f deploy/Dockerfile.crucible.cpu -t deploy-crucible:amd64-cpu .
+#     -f deploy/Dockerfile.crucible.base -t crucible-base:amd64 .
+#
+# 构建要点 (实测):
+#   - deb.debian.org 在模拟构建里会卡死 → 换清华 apt 镜像
+#   - torch 走 pytorch CPU wheel 源 (无 CUDA, 镜像 -2GB+)
+#   - --timeout/--retries: 构建期网络抖动 (files.pythonhosted.org 超时实测) 自愈
 FROM python:3.12-slim-amd64
 
 # 国内镜像加速 (构建期)
@@ -16,12 +19,13 @@ WORKDIR /srv
 
 # 系统依赖: 仅 libgomp (torch 运行时); 全部 Python 依赖走 wheel, 无需编译工具链
 # (build-essential 会撑爆 Docker Desktop 内存限额, 已实测踩坑)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' \
+        /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources 2>/dev/null || true \
+    && apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 依赖层与代码层分离: 代码变更只失效最后一层 (秒级重建), 不再重下 torch
-# --timeout/--retries: 构建期网络抖动 (files.pythonhosted.org 超时实测) 自愈
+# 依赖层: 变更极少, 摆渡一次; 代码变更只重建应用薄层
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --timeout 120 --retries 8 \
         --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" \
@@ -37,7 +41,7 @@ RUN pip install --no-cache-dir --timeout 120 --retries 8 \
 # 运行时 _model_is_cached 命中 → HF_HUB_OFFLINE → 零网络加载
 COPY .hf-bake/models--BAAI--bge-small-zh-v1.5 /root/.cache/huggingface/hub/models--BAAI--bge-small-zh-v1.5
 
-# 代码层 (变更只需重建这一层)
+# 兜底: 基础镜像里带一份构建当日的代码 (内网没 git 仓库也能直接跑)
 COPY src ./src
 COPY backend ./backend
 COPY frontend/dist ./frontend/dist

@@ -95,6 +95,21 @@ docker run -d --name crucible-docreader --restart unless-stopped -p 8081:8081 \
 echo "[5/6] 启动 crucible 融合服务"
 mkdir -p "$DATA_ROOT"
 docker rm -f crucible-app 2>/dev/null || true
+# 应用薄层: 从 git 代码秒级构建 (依赖+模型在 crucible-base 基础镜像, 摆渡一次到位)
+# 薄层失败则退回基础镜像 (内含构建当日的代码, 功能可用只是旧一些)
+if [ -n "$REPO_DIR" ]; then
+  cd "$REPO_DIR"
+  if docker build -f deploy/Dockerfile.crucible -t deploy-crucible:amd64-cpu . >/dev/null 2>&1; then
+    echo "  ✓ crucible 薄层构建完成 (最新代码)"
+  else
+    echo "  ⚠ 薄层构建失败, 用基础镜像直接运行 (代码为摆渡当日版本)"
+    docker tag crucible-base:amd64 deploy-crucible:amd64-cpu
+  fi
+  cd - > /dev/null
+else
+  echo "  ⚠ 未找到 crucible 仓库, 用基础镜像直接运行"
+  docker tag crucible-base:amd64 deploy-crucible:amd64-cpu
+fi
 # --add-host host-gateway: host.docker.internal 在非 Docker Desktop
 # 环境 (原生 docker/部分 WSL 配置) 不解析, 显式映射到宿主机网关
 docker run -d --name crucible-app --restart unless-stopped \
