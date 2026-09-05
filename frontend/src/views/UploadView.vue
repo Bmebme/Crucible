@@ -24,9 +24,9 @@
         <div class="el-upload__text">拖拽文件到这里，或 <em>点击选择</em></div>
         <template #tip>
           <div class="el-upload__tip">
-            md/txt 直通; pdf/docx 等经 MinerU 解析 (CPU 上分钟级)。
-            任务卡片会实时显示阶段, 无需等待上传按钮转圈。
-            验证记录请选 verification 子目录并带 verify_state frontmatter。
+            统一源: 原件存 raw/originals, MinerU 标准化 md 进 raw/sources
+            (RAG 与 llm-wiki 搜索共用)。pdf/docx 经 MinerU 解析 (CPU 上分钟级),
+            任务卡片实时显示阶段。验证记录请选 verification 子目录。
           </div>
         </template>
       </el-upload>
@@ -63,7 +63,7 @@
             <span v-else style="color: #bbb">—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="wiki_path" label="wiki 路径" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="wiki_path" label="落盘路径" min-width="200" show-overflow-tooltip />
       </el-table>
     </el-card>
   </div>
@@ -76,10 +76,10 @@ import { listJobs, listProjects, uploadDocument } from '../api'
 
 const STAGE_LABEL: Record<string, string> = {
   uploaded: '已接收', converting: 'MinerU 解析中', converted: '转换完成',
-  wiki_indexed: '写入 wiki', rag_ingesting: '向量化中', done: '完成', failed: '失败',
+  sourced: '源写入', wiki_indexed: '写入 wiki', rag_ingesting: '向量化中', done: '完成', failed: '失败',
 }
-const STAGE_ORDER = ['uploaded', 'converting', 'converted', 'wiki_indexed', 'rag_ingesting', 'done', 'failed']
-const ACTIVE = ['uploaded', 'converting', 'converted', 'wiki_indexed', 'rag_ingesting']
+const STAGE_ORDER = ['uploaded', 'converting', 'converted', 'sourced', 'wiki_indexed', 'rag_ingesting', 'done', 'failed']
+const ACTIVE = ['uploaded', 'converting', 'converted', 'sourced', 'wiki_indexed', 'rag_ingesting']
 
 const projectId = ref('')
 const projects = ref<Array<{ id: string }>>([])

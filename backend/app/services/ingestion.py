@@ -1,11 +1,17 @@
-"""上传摄入管线 (md/txt 双通道, P3a)。
+"""上传摄入管线 (统一源架构)。
 
-原件存档:       <project>/raw/sources/<文件名> (证据链, 转换前原子写入)
-通道 A (wiki):  原子写入 <project>/wiki/ 子目录, llm-wiki daemon watcher 索引
-通道 B (rag):   RagEngine.ingest → LightRAG ainsert
+布局约定 (2026-09-05, 与 py-llm-wiki 搜索/文件树对齐):
+  raw/originals/<原名>      原始 PDF/docx 存档 (证据链; 不进树不检索)
+  raw/sources/<名>.md       MinerU 标准化源 = 统一输入源 (RAG 全文 +
+                            llm-wiki 树/搜索公开根, 两引擎同一源头)
+  wiki/verification/        验证记录 (知识页, 原约定不变)
+  <项目>/.lightrag/         RAG 索引 (派生数据)
+
+通道 A (源写入): 原子写标准化源 (默认 raw/sources, verification 例外)
+通道 B (rag):     RagEngine.ingest → LightRAG ainsert (内存传文本)
 状态跟踪:       ingestion_jobs 表; status = 当前阶段, detail.stages =
                 各阶段时间戳 (前端实时显示任务卡在哪一步)
-阶段流:         uploaded → (converting) → converted → wiki_indexed
+阶段流:         uploaded → (converting) → converted → sourced
                 → rag_ingesting → done / failed
 """
 from __future__ import annotations
@@ -20,12 +26,8 @@ from ..models import IngestionJob
 from .engines import get_rag
 
 ALLOWED_EXT = {".md", ".txt"}
-# 二进制格式: docreader 转换 (MinerU/markitdown) → md 后走同一双通道
+# 二进制格式: docreader 转换 (MinerU/markitdown) → md 后走统一源
 BINARY_EXT = {".pdf", ".docx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg"}
-
-WIKI_SUBDIR = {
-    "verification": "verification",  # 验证记录模板 (frontmatter 带 verify_state)
-}
 
 
 def validate_upload(filename: str, content: bytes) -> str | None:
@@ -86,20 +88,22 @@ async def run_ingestion(
         )
 
     try:
-        # 1.2 原始文件存档 (对齐 py-llm-wiki raw/sources 约定):
-        #     证据链保留原件 —— MinerU 是转换不是归档, 解析产物丢 wiki 通道,
-        #     原件必须留档 (转换失败也不丢; 换解析器可重跑; 同名覆盖=最新为准)。
-        raw_dir = Path(project_path) / "raw" / "sources"
-        raw_dir.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=str(raw_dir), suffix=Path(filename).suffix)
-        try:
-            with os.fdopen(fd, "wb") as f:
-                f.write(content)
-            os.replace(tmp, raw_dir / filename)
-        except Exception:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-            raise
+        # 1.2 原始文档存档 (证据链): 二进制 → raw/originals; 文本直传
+        #     的内容即标准化源, 不单独存原件
+        originals_rel = ""
+        if is_binary:
+            raw_dir = Path(project_path) / "raw" / "originals"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=str(raw_dir), suffix=Path(filename).suffix)
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(content)
+                os.replace(tmp, raw_dir / filename)
+                originals_rel = f"raw/originals/{filename}"
+            except Exception:
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
+                raise
 
         # 1.5 二进制格式: docreader 转换 (MinerU/markitdown)
         if is_binary:
@@ -116,9 +120,16 @@ async def run_ingestion(
             md_filename = filename
             stages = await _set_phase(job_id, "converted", stages)
 
-        # 2. 通道 A: 原子写入 wiki 目录 (临时文件 + rename, 防 watcher 半写竞态)
-        wiki_root = Path(project_path) / "wiki"
-        target_dir = wiki_root / (WIKI_SUBDIR.get(subdir, "") or "")
+        # 2. 标准化源写入 (统一输入源, RAG 与 llm-wiki 搜索共用):
+        #    默认 → raw/sources/ (llm-wiki 公开根, 树+搜索覆盖)
+        #    verification 子目录 → wiki/verification/ (知识页, 原约定)
+        #    原子写 (临时文件 + rename, 防 watcher 半写竞态)
+        if subdir == "verification":
+            target_dir = Path(project_path) / "wiki" / "verification"
+            source_rel = str(Path("wiki") / "verification" / md_filename)
+        else:
+            target_dir = Path(project_path) / "raw" / "sources"
+            source_rel = str(Path("raw") / "sources" / md_filename)
         target_dir.mkdir(parents=True, exist_ok=True)
         target = target_dir / md_filename
         fd, tmp = tempfile.mkstemp(dir=str(target_dir), suffix=".md")
@@ -130,9 +141,8 @@ async def run_ingestion(
             if os.path.exists(tmp):
                 os.unlink(tmp)
             raise
-        wiki_path = str(Path("wiki") / (WIKI_SUBDIR.get(subdir, "") or "") / md_filename)
-        stages = await _set_phase(job_id, "wiki_indexed", stages, wiki_path=wiki_path)
-        await _update_job(job_id, wiki_path=wiki_path)
+        stages = await _set_phase(job_id, "sourced", stages, source_path=source_rel)
+        await _update_job(job_id, wiki_path=source_rel)
 
         # 3. 通道 B: rag 摄入 (纯文本; source_name 写入 reference 列表供引用层锚定)
         stages = await _set_phase(job_id, "rag_ingesting", stages)
@@ -145,8 +155,9 @@ async def run_ingestion(
         await _update_job(
             job_id, status="done",
             detail={"stages": {**stages, "done": _now()},
-                    "chars": len(text), "channels": ["wiki", "rag"],
-                    "raw_path": f"raw/sources/{filename}"},
+                    "chars": len(text), "channels": ["source", "rag"],
+                    "source_path": source_rel,
+                    "raw_path": originals_rel},
         )
     except Exception as e:
         await _fail(str(e))
