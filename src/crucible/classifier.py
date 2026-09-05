@@ -12,8 +12,8 @@ import json
 import re
 from typing import Any
 
-import httpx
 
+from .llm_client import chat_complete
 from .config import Config
 from .schemas import IntentConfig, QueryType
 
@@ -94,22 +94,13 @@ async def classify_by_llm(query: str, config: Config) -> IntentConfig | None:
     if not config.llm_api_key:
         return None
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{config.llm_base}/chat/completions",
-                headers={"Authorization": f"Bearer {config.llm_api_key}"},
-                json={
-                    "model": config.llm_model,
-                    "messages": [
-                        {"role": "system", "content": _LLM_PROMPT},
-                        {"role": "user", "content": query},
-                    ],
-                    "temperature": 0,
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-    except (httpx.HTTPError, KeyError, IndexError, json.JSONDecodeError):
+        content = await chat_complete(
+            config,
+            [{"role": "system", "content": _LLM_PROMPT},
+             {"role": "user", "content": query}],
+            temperature=0,
+        )
+    except Exception:
         return None
 
     try:
@@ -200,26 +191,14 @@ async def _rewrite_by_llm(
         return None
     recent = "\n".join(f"- {h}" for h in history[-6:])
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{config.llm_base}/chat/completions",
-                headers={"Authorization": f"Bearer {config.llm_api_key}"},
-                json={
-                    "model": config.llm_model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": _REWRITE_PROMPT.format(
-                                history=recent, query=query
-                            ),
-                        }
-                    ],
-                    "temperature": 0,
-                },
+        rewritten = (
+            await chat_complete(
+                config,
+                [{"role": "user", "content": _REWRITE_PROMPT.format(history=recent, query=query)}],
+                temperature=0,
             )
-            resp.raise_for_status()
-            rewritten = resp.json()["choices"][0]["message"]["content"].strip()
-    except (httpx.HTTPError, KeyError, IndexError, json.JSONDecodeError):
+        ).strip()
+    except Exception:
         return None
     if not rewritten or len(rewritten) > 200:
         return None

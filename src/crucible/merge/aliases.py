@@ -16,9 +16,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-import httpx
 import yaml
 
+from ..llm_client import chat_complete
 from ..config import Config
 from .m1_union import normalize_name
 
@@ -143,24 +143,12 @@ async def resolve_llm_pairs(
         [{"a": a, "b": b} for a, b in pairs], ensure_ascii=False
     )
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{config.llm_base}/chat/completions",
-                headers={"Authorization": f"Bearer {config.llm_api_key}"},
-                json={
-                    "model": config.llm_model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": _L3_PROMPT.format(json_pairs=body),
-                        }
-                    ],
-                    "temperature": 0,
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-    except (httpx.HTTPError, KeyError, IndexError, json.JSONDecodeError):
+        content = await chat_complete(
+            config,
+            [{"role": "user", "content": _L3_PROMPT.format(json_pairs=body)}],
+            temperature=0,
+        )
+    except Exception:
         return set()
 
     # 逐项解析: 按输入顺序对齐 LLM 输出 (输出不完整时按位置截断)

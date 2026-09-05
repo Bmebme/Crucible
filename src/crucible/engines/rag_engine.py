@@ -146,82 +146,19 @@ class RagEngine:
 
             cfg = self.config
 
+            from ..llm_client import chat_complete
+
             async def llm_model_func(prompt, system_prompt=None, history_messages=None, **kwargs):
-                """裸 httpx 直连 OpenAI 兼容网关 (LLM_BASE 填直连 API 地址)。
-
-                内网实调: ① 中转网关对 chat 请求返回 text/html → openai SDK
-                把响应当字符串 → LightRAG 取 .choices 炸 ("str object has
-                no attribute choices"); ② 直连端点强制 SSE 流式 (多个
-                data: 帧), SDK 非流式解析同样不适用。裸 httpx 两种形态
-                都收 (SSE 拼 delta.content / 单 JSON 取 message.content),
-                不转发 response_format (中转多不支持, 结构化靠 LightRAG
-                的提取 prompt 自带 JSON 指令)。
-                """
-                import httpx
-
                 messages: list[dict] = []
                 if system_prompt:
                     messages.append({"role": "system", "content": system_prompt})
                 messages.extend(list(history_messages or []))
                 messages.append({"role": "user", "content": prompt})
-
-                payload: dict = {"model": cfg.llm_model, "messages": messages,
-                                 "stream": True}
-                # 结构化请求优先转发 response_format (json_object 对实体抽取
-                # 质量关键); 网关不支持 (400) 时去掉重试一次
-                use_rf = bool(kwargs.get("response_format"))
-                if use_rf:
-                    payload["response_format"] = kwargs["response_format"]
-                headers = {"Content-Type": "application/json"}
-                if cfg.llm_api_key:
-                    headers["Authorization"] = f"Bearer {cfg.llm_api_key}"
-
-                t0 = time.monotonic()
-                url = f"{cfg.llm_base.rstrip('/')}/chat/completions"
-                async with httpx.AsyncClient(timeout=600.0, trust_env=False) as c:
-                    r = await c.post(url, headers=headers, json=payload)
-                    if r.status_code == 400 and use_rf:
-                        payload.pop("response_format", None)
-                        r = await c.post(url, headers=headers, json=payload)
-                    r.raise_for_status()
-                    ct = r.headers.get("content-type", "")
-                    text = r.text
-                    if "event-stream" in ct or text.lstrip().startswith("data:"):
-                        # SSE: 收集各帧 delta.content
-                        parts: list[str] = []
-                        for line in text.splitlines():
-                            if not line.startswith("data:"):
-                                continue
-                            d = line[5:].strip()
-                            if d == "[DONE]":
-                                break
-                            try:
-                                obj = json.loads(d)
-                            except json.JSONDecodeError:
-                                continue
-                            choices = obj.get("choices") or []
-                            if choices:
-                                delta = choices[0].get("delta") or {}
-                                if delta.get("content"):
-                                    parts.append(delta["content"])
-                        content = "".join(parts)
-                    else:
-                        # 非流式: 单 JSON
-                        obj = json.loads(text)
-                        choices = obj.get("choices") or []
-                        if not choices:
-                            raise ValueError(f"网关响应无 choices: {text[:200]}")
-                        content = choices[0].get("message", {}).get("content", "") or ""
-                    # 剥 markdown 围栏 (部分模型即使给了 json_object 也爱包 ```json)
-                    if content.lstrip().startswith("```"):
-                        content = re.sub(
-                            r"^\s*```[a-zA-Z]*\s*|\s*```\s*$", "", content
-                        ).strip()
-                    logger.info(
-                        "llm call: model=%s (%.1fs, %d chars)",
-                        cfg.llm_model, time.monotonic() - t0, len(content),
-                    )
-                    return content
+                return await chat_complete(
+                    cfg,
+                    messages,
+                    response_format=kwargs.get("response_format"),
+                )
 
             # 模型已缓存: 关闭 hub 在线探测 (hf-mirror 抖动时 HEAD 重试会阻塞分钟级)
             if _model_is_cached(cfg.embed_model):

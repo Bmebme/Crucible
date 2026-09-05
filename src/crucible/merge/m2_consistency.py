@@ -11,8 +11,8 @@ import json
 import re
 from typing import Any
 
-import httpx
 
+from ..llm_client import chat_complete
 from ..config import Config
 
 _PROMPT = """你是漏洞验证知识库的合并器。输入是 llm_wiki 与 LightRAG 两个引擎对同一机制问题的检索结论。
@@ -47,22 +47,13 @@ async def compare_mechanism(
         rag_claim=f"{rag_claim}（来源: {rag_source or 'unknown'}）",
     )
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{config.llm_base}/chat/completions",
-                headers={"Authorization": f"Bearer {config.llm_api_key}"},
-                json={
-                    "model": config.llm_model,
-                    "messages": [
-                        {"role": "system", "content": _PROMPT},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0,
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-    except (httpx.HTTPError, KeyError, IndexError):
+        content = await chat_complete(
+            config,
+            [{"role": "system", "content": _PROMPT},
+             {"role": "user", "content": prompt}],
+            temperature=0,
+        )
+    except Exception:
         return None
 
     try:
