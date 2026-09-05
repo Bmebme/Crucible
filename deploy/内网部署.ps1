@@ -57,9 +57,10 @@ docker run -d --name crucible-docreader --restart unless-stopped -p 8081:8081 `
 Write-Host "[5/6] 启动 crucible 融合服务" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path "$DATA_ROOT" | Out-Null
 docker rm -f crucible-app 2>$null
+$pipArg = if ($PIP_SOURCE) { @("-e", "PIP_INDEX_URL=$PIP_SOURCE") } else { @() }
 docker run -d --name crucible-app --restart unless-stopped `
   -p 8080:8080 `
-  $(if ($PIP_SOURCE) { "-e `"PIP_INDEX_URL=$PIP_SOURCE`"" }) `
+  @pipArg `
   -e "CRUCIBLE_DATABASE_URL=$PG_URL" `
   -e "CRUCIBLE_WIKI_BASE=http://host.docker.internal:19828" `
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" `
