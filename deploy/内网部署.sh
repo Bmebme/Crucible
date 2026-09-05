@@ -68,7 +68,10 @@ docker run -d --name crucible-docreader --restart unless-stopped -p 8081:8081 \
 echo "[5/6] 启动 crucible 融合服务"
 mkdir -p "$DATA_ROOT"
 docker rm -f crucible-app 2>/dev/null || true
+# --add-host host-gateway: host.docker.internal 在非 Docker Desktop
+# 环境 (原生 docker/部分 WSL 配置) 不解析, 显式映射到宿主机网关
 docker run -d --name crucible-app --restart unless-stopped \
+  --add-host=host.docker.internal:host-gateway \
   -p 8080:8080 \
   -e "CRUCIBLE_DATABASE_URL=$PG_URL" \
   -e "CRUCIBLE_WIKI_BASE=http://host.docker.internal:19828" \
