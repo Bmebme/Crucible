@@ -31,6 +31,7 @@ logger = logging.getLogger("crucible.ingestion")
 ALLOWED_EXT = {".md", ".txt"}
 # 二进制格式: docreader 转换 (MinerU/markitdown) → md 后走统一源
 BINARY_EXT = {".pdf", ".docx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg"}
+MAX_BYTES = 50 * 1024 * 1024  # 与 docreader 的 50MB 上限一致
 
 
 def validate_upload(filename: str, content: bytes) -> str | None:
