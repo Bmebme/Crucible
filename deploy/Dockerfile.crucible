@@ -13,7 +13,8 @@ COPY backend ./backend
 # --no-build-isolation: pyproject 无显式 build-system, pip 默认走隔离环境
 # 并从 PIP_INDEX_URL (清华源) 下载 setuptools —— 内网不可达, 重试超时
 # 分钟级 (薄层构建卡死根因)。镜像内已有 setuptools (torch 依赖带入)
-RUN pip install --no-cache-dir --no-deps --no-build-isolation -e .
+# --no-index: 再上一道保险, 任何索引 (内源/外源/隐藏配置) 一律不访问
+RUN PIP_NO_INDEX=1 pip install --no-cache-dir --no-deps --no-build-isolation -e .
 
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "backend"]
