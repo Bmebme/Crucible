@@ -43,6 +43,15 @@ if (-not (Test-Path $appState)) {
 '@ | Out-File -Encoding utf8 $appState
     Write-Host "  → 已生成 $appState (项目注册见【注册项目】)" -ForegroundColor Yellow
 }
+# llmConfig 直接写进 app-state: deploy 参数是唯一事实源, UI 设置页读 state 而非 env
+$state = @{}
+if (Test-Path $appState) { $state = Get-Content $appState -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable }
+$state["llmConfig"] = @{
+    provider = "custom"; apiMode = "chat_completions"
+    customEndpoint = $LLM_BASE; apiKey = $LLM_API_KEY; model = $LLM_MODEL
+}
+$state | ConvertTo-Json -Depth 8 | Out-File -Encoding utf8 $appState
+Write-Host "  → llmConfig 已写入 $appState" -ForegroundColor Yellow
 docker rm -f crucible-llmwiki 2>$null
 docker run -d --name crucible-llmwiki --restart unless-stopped `
   -p 19828:19828 `
@@ -68,9 +77,8 @@ docker run -d --name crucible-app --restart unless-stopped `
   -e "CRUCIBLE_WIKI_BASE=http://host.docker.internal:19828" `
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" `
   -e "CRUCIBLE_LLM_BASE=$LLM_BASE" -e "CRUCIBLE_LLM_API_KEY=$LLM_API_KEY" -e "CRUCIBLE_LLM_MODEL=$LLM_MODEL" `
-  -e "CRUCIBLE_EMBED_MODEL=BAAI/bge-m3" -e "CRUCIBLE_EMBED_DIM=1024" -e "HF_HUB_OFFLINE=1" `
+  -e "HF_HUB_OFFLINE=1" `
   -v "${DATA_ROOT}:/data" `
-  -v "$env:USERPROFILE/.cache/huggingface:/root/.cache/huggingface" `
   deploy-crucible:amd64-cpu | Out-Null
 
 Write-Host "[6/6] 健康检查" -ForegroundColor Cyan

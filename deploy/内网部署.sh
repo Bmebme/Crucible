@@ -51,6 +51,21 @@ if [ ! -f "$APPSTATE" ]; then
 EOF
   echo "  → 已生成 $APPSTATE (项目注册见文末指引)"
 fi
+# llmConfig 直接写进 app-state: deploy 参数是唯一事实源, UI 设置页读的是
+# state 而非 env —— 之前只靠镜像 env 覆盖, 界面显示空需手工填 (内网实调)
+python3 - "$APPSTATE" "$LLM_BASE" "$LLM_API_KEY" "$LLM_MODEL" <<'PYEOF'
+import json, sys
+p, base, key, model = sys.argv[1:5]
+try:
+    s = json.load(open(p, encoding="utf-8"))
+except Exception:
+    s = {}
+s.setdefault("apiConfig", {}).update({"allowUnauthenticated": True, "allowLanAccess": True})
+s["llmConfig"] = {"provider": "custom", "apiMode": "chat_completions",
+                  "customEndpoint": base, "apiKey": key, "model": model}
+json.dump(s, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+print(f"  → llmConfig 已写入 {p}")
+PYEOF
 docker rm -f crucible-llmwiki 2>/dev/null || true
 docker run -d --name crucible-llmwiki --restart unless-stopped \
   -p 19828:19828 \
@@ -91,7 +106,6 @@ docker run -d --name crucible-app --restart unless-stopped \
   -e "CRUCIBLE_WIKI_BASE=http://host.docker.internal:19828" \
   -e "CRUCIBLE_DOCREADER_BASE=http://host.docker.internal:8081" \
   -e "CRUCIBLE_LLM_BASE=$LLM_BASE" -e "CRUCIBLE_LLM_API_KEY=$LLM_API_KEY" -e "CRUCIBLE_LLM_MODEL=$LLM_MODEL" \
-  -e "CRUCIBLE_EMBED_MODEL=BAAI/bge-m3" -e "CRUCIBLE_EMBED_DIM=1024" \
   -v "$DATA_ROOT:/data" \
   -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
   -v "$HOME/.cache/tiktoken:/root/.cache/tiktoken" \
