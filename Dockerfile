@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir \
         fastapi>=0.115 uvicorn>=0.30 "sqlalchemy[asyncio]>=2.0" asyncpg>=0.29 \
         pydantic-settings>=2.3 python-multipart>=0.0.9 alembic>=1.13 greenlet \
         httpx>=0.27 pydantic>=2.7 pyyaml>=6.0 "mcp<2" \
+        "openai<4,>=2" \
     && true
 
 # 代码层 (变更只需重建这一层)
