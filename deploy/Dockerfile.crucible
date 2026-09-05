@@ -3,12 +3,13 @@
 #   docker load -i crucible-cpu.tar
 # 构建 (crucible 仓库根, 代码经 GitHub 同步):
 #   docker build -f deploy/Dockerfile.crucible -t deploy-crucible:amd64-cpu .
+# 注意: frontend/dist 是构建产物且被 gitignore, git 拉下的代码没有它
+# → 静态资源继承基础镜像里烧入的版本; 前端变更需重打基础镜像
 FROM crucible-base:amd64
 
 WORKDIR /srv
 COPY src ./src
 COPY backend ./backend
-COPY frontend/dist ./frontend/dist
 RUN pip install --no-cache-dir --no-deps -e .
 
 EXPOSE 8080
