@@ -38,7 +38,14 @@ async def lifespan(app: FastAPI):
         get_settings().llm_model,
         get_settings().alias_mode,
     )
-    yield
+    if _mcp_app is not None:
+        # mcp streamable_http_app 自带 lifespan (session_manager.run()
+        # 初始化任务组), 路由提升后必须手动嵌套, 否则请求时报
+        # "Task group is not initialized"
+        async with _mcp_app.router.lifespan_context(_mcp_app):
+            yield
+    else:
+        yield
 
 
 app = FastAPI(
@@ -82,6 +89,21 @@ app.include_router(fusion.router)
 app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(ledger.router)
+
+# MCP HTTP 端点 (Streamable HTTP): 客户端连 http://<host>:8080/mcp
+# 经验: Mount 对纯函数/Starlette app 的匹配行为不可靠, 直接把内层
+# /mcp 路由的 endpoint 提升注册到主应用最前面 (静态挂载之前)
+_mcp_app = None
+try:
+    from mcp_server import http_app as _mcp_app
+    from starlette.routing import Route as _SR
+
+    _mcp_route = next(r for r in _mcp_app.routes if r.path == "/mcp")
+    app.router.routes.insert(
+        0, _SR("/mcp", _mcp_route.endpoint, methods=["GET", "POST", "DELETE"])
+    )
+except ImportError:
+    pass  # mcp 未安装时跳过 (server extra 已含 mcp<2)
 
 # 前端静态资源 (P4 构建产物; 未构建时目录不存在, 忽略)
 _static = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"

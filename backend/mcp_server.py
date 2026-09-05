@@ -152,5 +152,10 @@ async def kb_record_verification(
     return await _upload_verification(project_id, title, verify_state, env, content)
 
 
+# Streamable HTTP 传输: 挂进 crucible 服务 (/mcp), 供多人远程调用
+# (uvicorn 直接跑也可以: uvicorn backend.mcp_server:http_app)
+http_app = mcp.streamable_http_app()
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
