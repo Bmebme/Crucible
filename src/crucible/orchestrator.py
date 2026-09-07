@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,51 @@ from .merge.m1_union import normalize_name, union_merge
 from .merge.m3_state import sort_by_verify_state
 from .engines.wiki_engine import find_heading
 from .schemas import Citation, FusionResponse, QueryType, WikiHit
+
+
+def _sentence_slice(text: str, max_chars: int = 800) -> str:
+    """按句子边界截断: 超过 max_chars 时回退到最后一个句末标点/换行,
+    引用与简介不再半截话 (内网实调反馈)。"""
+    text = (text or "").strip()
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars]
+    best = -1
+    for sep in ("。", "！", "？", "\n", ". ", "! ", "? "):
+        idx = cut.rfind(sep)
+        if idx > max_chars * 0.5 and idx > best:
+            best = idx + (1 if sep not in (". ", "! ", "? ") else 2)
+    return cut[:best] if best > 0 else cut
+
+
+def _strip_frontmatter(content: str) -> str:
+    """引用 excerpt 去掉 YAML frontmatter (verify_state 等元数据不该进原文引用)。"""
+    content = content or ""
+    if content.startswith("---"):
+        end = content.find("---", 3)
+        if end != -1:
+            return content[end + 3:].strip()
+    return content
+
+
+def _snippet_around(content: str, snippet: str, max_chars: int = 200) -> str:
+    """把搜索片段扩展成完整句子窗口: 定位 snippet 在原文中的位置,
+    从所在句开头取到 max_chars 并收在句末; 找不到则退全文首句。"""
+    content = content or ""
+    snippet = (snippet or "").strip()
+    if not content:
+        return snippet
+    norm_c = re.sub(r"\s+", " ", content)
+    if snippet:
+        pos = norm_c.find(re.sub(r"\s+", " ", snippet)[:60])
+        if pos >= 0:
+            start = max(
+                norm_c.rfind("。", 0, pos) + 1,
+                norm_c.rfind("\n", 0, pos) + 1,
+                0,
+            )
+            return _sentence_slice(norm_c[start:pos + max_chars], max_chars)
+    return _sentence_slice(norm_c, max_chars)
 
 
 class FusionOrchestrator:
@@ -201,12 +247,13 @@ class FusionOrchestrator:
                 source="rag",
                 chunk_id=c.reference_id,
                 heading_path=c.headings,
-                excerpt=c.content[:400],
+                excerpt=_sentence_slice(c.content, 800),
             )
             for c in rag_context[:3]
         ]
         wiki_top = wiki_hits[0] if wiki_hits else None
-        # 引用段落级定位: 拉整页原文, 给 wiki 顶部引用补 heading_path
+        # 引用段落级定位: 拉整页原文, 给 wiki 顶部引用补 heading_path +
+        # 整句 excerpt + 完整句子的简介 (不再半截话)
         if wiki_top and wiki_top.citations:
             try:
                 content = await self.wiki.read_page_content(
@@ -215,6 +262,10 @@ class FusionOrchestrator:
                 heading = find_heading(content, wiki_top.snippet)
                 if heading:
                     wiki_top.citations[0].heading_path = heading
+                wiki_top.citations[0].excerpt = _sentence_slice(
+                    _strip_frontmatter(content), 800
+                )
+                wiki_top.snippet = _snippet_around(content, wiki_top.snippet)
             except Exception:
                 pass
         if wiki_top is None and not rag_answer:
@@ -234,7 +285,7 @@ class FusionOrchestrator:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
             if rag_answer:
                 resp.results.append({
-                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": _sentence_slice(rag_answer, 300),
                     "provenance": ["rag"], "confidence": "degraded",
                     "citations": [c.to_dict() for c in rag_citations],
                 })
@@ -250,7 +301,7 @@ class FusionOrchestrator:
                     resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
                 if rag_answer:
                     resp.results.append({
-                        "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                        "kind": "entity", "name": "LightRAG 结论", "snippet": _sentence_slice(rag_answer, 300),
                         "provenance": ["rag"], "confidence": "degraded",
                         "citations": [c.to_dict() for c in rag_citations],
                     })
@@ -271,7 +322,7 @@ class FusionOrchestrator:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"]})
             if rag_answer:
                 resp.results.append({
-                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_answer[:300],
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": _sentence_slice(rag_answer, 300),
                     "provenance": ["rag"],
                     "citations": [c.to_dict() for c in rag_citations],
                 })

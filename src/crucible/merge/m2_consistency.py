@@ -28,6 +28,8 @@ _PROMPT = """你是漏洞验证知识库的合并器。输入是 llm_wiki 与 Li
 - 冲突：输出 {{"consistent": false, "conflict": {{"wiki_says": {{"claim": "...", "source": "..."}}, "rag_says": {{"claim": "...", "source": "..."}}}}}}
 
 约束：不得改写、综合、推测输入之外的机制事实；冲突时禁止选择其中一方。
+呈现要求：conclusion 必须是完整句子 —— 结论先行，一句话说清机制事实，
+禁止半句截断、禁止省略号；evidence 的 claim 从输入原文中整句摘录，不缩写。
 只输出 JSON。
 """
 
