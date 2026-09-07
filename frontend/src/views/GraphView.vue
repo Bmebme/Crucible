@@ -7,7 +7,7 @@
       </el-select>
       <span class="hint">LightRAG 实体关系图 (按度数取中心子图, 悬停看描述)</span>
     </template>
-    <div ref="chart" class="chart" :style="{ height: chartHeight + 'px' }" />
+    <div ref="chart" class="chart" />
   </el-card>
 </template>
 
@@ -19,7 +19,6 @@ import { api, listProjects } from '../api'
 const projectId = ref('')
 const projects = ref<Array<{ id: string }>>([])
 const chart = ref<HTMLElement>()
-const chartHeight = ref(480)
 
 onMounted(async () => {
   try {
@@ -40,9 +39,6 @@ async function load() {
   }))
   const edges = data.edges.map((e: any) => ({ source: e.s, target: e.t }))
   const cats = [...new Set(data.nodes.map((n: any) => n.type))].map((t: any) => ({ name: t }))
-
-  // 高度随节点数自适应 (节点少时不留大片空白, 内网实调反馈)
-  chartHeight.value = Math.min(640, Math.max(240, 200 + nodes.length * 18))
 
   echarts.getInstanceByDom(chart.value!)?.dispose()
   const inst = echarts.init(chart.value!)
@@ -72,6 +68,8 @@ async function load() {
 </script>
 
 <style scoped>
-.chart { min-height: 320px; }
+/* 撑满视口: 100vh - (60px 顶栏 + 20px 上内边距 + ~56px 卡片头 + 20px 下内边距)
+   图区吃满页面, 力导向布局自会在整块画布内居中铺开 (内网实调) */
+.chart { height: calc(100vh - 170px); min-height: 400px; }
 .hint { font-size: 12px; color: #909399; margin-left: 12px; }
 </style>
