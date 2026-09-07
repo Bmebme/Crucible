@@ -3,7 +3,7 @@ import axios from 'axios'
 // dev 走 vite 代理 (/api → 后端), 生产同源 (FastAPI 托管 dist)
 const baseURL = import.meta.env.DEV ? '/api' : ''
 
-export const api = axios.create({ baseURL, timeout: 180000 })
+export const api = axios.create({ baseURL, timeout: 300000 })
 
 export interface QueryRequest {
   query: string
