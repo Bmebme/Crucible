@@ -154,6 +154,15 @@
           </div>
           <div v-if="r.note" class="ri-note">📌 {{ r.note }}</div>
           <div v-if="r.path" class="ri-path">📄 {{ r.path }}</div>
+          <!-- 双引擎完整原文块 (用户要"全": wiki 原文 + RAG 清洗正文, 长不截短) -->
+          <div v-if="r.wiki_excerpt || r.content" class="ri-source-block">
+            <div class="cit-title">📄 wiki 原文</div>
+            <div class="ri-snippet">{{ r.wiki_excerpt || r.content }}</div>
+          </div>
+          <div v-if="r.rag_excerpt" class="ri-source-block">
+            <div class="cit-title">🧩 RAG 原文</div>
+            <div class="ri-snippet">{{ r.rag_excerpt }}</div>
+          </div>
           <div v-if="r.citations?.length" class="ri-citations">
             <div class="cit-title">🔗 引用（{{ r.citations.length }}）</div>
             <div v-for="(c, ci) in r.citations" :key="ci" class="cit-item">
@@ -370,6 +379,7 @@ async function run() {
 .ev-item { display: flex; align-items: baseline; gap: 6px; margin: 4px 0; font-size: 13px; }
 .ev-claim { color: #303133; }
 .ev-source { color: #909399; font-size: 12px; }
+.ri-source-block { margin-top: 8px; background: #f8fafc; border-radius: 4px; padding: 8px 10px; }
 .ri-note { margin-top: 4px; color: #b8860b; font-size: 12px; }
 .ri-path { margin-top: 4px; color: #909399; font-size: 12px; }
 .ri-citations { margin-top: 8px; background: #f8fafc; border-radius: 6px; padding: 8px 10px; }

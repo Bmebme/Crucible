@@ -292,21 +292,27 @@ class FusionOrchestrator:
         ]
         wiki_top = wiki_hits[0] if wiki_hits else None
         # 引用段落级定位: 拉整页原文, 给 wiki 顶部引用补 heading_path +
-        # 整句 excerpt + 完整句子的简介 (不再半截话)
-        if wiki_top and wiki_top.citations:
+        # 整句 excerpt + 完整句子的简介 (不再半截话); 同时备好展示用
+        # 大段原文 (wiki_content, 用户要"全" —— 内网实调)
+        wiki_content = ""
+        if wiki_top:
             try:
                 content = await self.wiki.read_page_content(
                     self.project_id, wiki_top.path
                 )
-                heading = find_heading(content, wiki_top.snippet)
-                if heading:
-                    wiki_top.citations[0].heading_path = heading
-                wiki_top.citations[0].excerpt = _sentence_slice(
-                    _strip_frontmatter(content), 800
-                )
+                wiki_content = _sentence_slice(_strip_frontmatter(content), 2000)
+                if wiki_top.citations:
+                    heading = find_heading(content, wiki_top.snippet)
+                    if heading:
+                        wiki_top.citations[0].heading_path = heading
+                    wiki_top.citations[0].excerpt = _sentence_slice(
+                        _strip_frontmatter(content), 800
+                    )
                 wiki_top.snippet = _snippet_around(content, wiki_top.snippet)
             except Exception:
                 pass
+        # RAG 侧展示文本: 清洗后给足 2000 字符 (完整为主, 不再 300 残段)
+        rag_display = _clean_rag_display(rag_answer, 2000)
         if wiki_top is None and not rag_answer:
             resp.notes.append("两引擎均无召回")
             return
@@ -323,10 +329,10 @@ class FusionOrchestrator:
         if compared is None:
             # LLM 不可用: 降级为单源并列 (设计文档 §9.3)
             if wiki_top:
-                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
+                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content})
             if rag_answer:
                 resp.results.append({
-                    "kind": "entity", "name": "LightRAG 结论", "snippet": _clean_rag_display(rag_answer),
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,
                     "provenance": ["rag"], "confidence": "degraded",
                     "citations": [c.to_dict() for c in rag_citations],
                 })
@@ -339,10 +345,10 @@ class FusionOrchestrator:
             if not all_citations:
                 resp.notes.append("M2 合并结论无引用支撑, 降级为并列输出")
                 if wiki_top:
-                    resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
+                    resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content})
                 if rag_answer:
                     resp.results.append({
-                        "kind": "entity", "name": "LightRAG 结论", "snippet": _clean_rag_display(rag_answer),
+                        "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,
                         "provenance": ["rag"], "confidence": "degraded",
                         "citations": [c.to_dict() for c in rag_citations],
                     })
@@ -355,15 +361,17 @@ class FusionOrchestrator:
                     "confidence": "high",
                     "provenance": ["wiki", "rag", "M2"],
                     "citations": [c.to_dict() for c in all_citations],
+                    "wiki_excerpt": wiki_content,
+                    "rag_excerpt": rag_display,
                 }
             )
         else:
             resp.conflicts.append(compared.get("conflict") or {})
             if wiki_top:
-                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"]})
+                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "content": wiki_content})
             if rag_answer:
                 resp.results.append({
-                    "kind": "entity", "name": "LightRAG 结论", "snippet": _clean_rag_display(rag_answer),
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,
                     "provenance": ["rag"],
                     "citations": [c.to_dict() for c in rag_citations],
                 })
