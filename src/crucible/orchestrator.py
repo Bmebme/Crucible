@@ -302,28 +302,44 @@ class FusionOrchestrator:
             for c in rag_context[:3]
         ]
         wiki_top = wiki_hits[0] if wiki_hits else None
-        # 引用段落级定位: 拉整页原文, 给 wiki 顶部引用补 heading_path +
-        # 整句 excerpt + 完整句子的简介 (不再半截话); 同时备好展示用
-        # 大段原文 (wiki_content, 用户要"全" —— 内网实调)
-        wiki_content = ""
-        if wiki_top:
-            try:
-                content = await self.wiki.read_page_content(
-                    self.project_id, wiki_top.path
-                )
-                wiki_content = _sentence_slice(_strip_frontmatter(content), 2000)
-                if wiki_top.citations:
-                    heading = find_heading(content, wiki_top.snippet)
-                    if heading:
-                        wiki_top.citations[0].heading_path = heading
-                    wiki_top.citations[0].excerpt = _sentence_slice(
-                        _strip_frontmatter(content), 800
+        # 全量呈现: 所有 wiki 命中都读原文 (之前只读第一名, 其余丢弃
+        # —— 内网实调: page read 每次都只出现一次)
+        wiki_raw: dict[str, str] = {}
+        if wiki_hits:
+            async def read_hit(h: WikiHit) -> tuple[str, str]:
+                try:
+                    return h.path, await self.wiki.read_page_content(
+                        self.project_id, h.path
                     )
-                wiki_top.snippet = _snippet_around(content, wiki_top.snippet)
-            except Exception:
-                pass
+                except Exception:
+                    return h.path, ""
+
+            pairs = await asyncio.gather(*(read_hit(h) for h in wiki_hits[:3]))
+            wiki_raw = dict(pairs)
+        wiki_contents = {
+            p: _sentence_slice(_strip_frontmatter(c), 2000) for p, c in wiki_raw.items()
+        }
+        wiki_content = wiki_contents.get(wiki_top.path, "") if wiki_top else ""
+        # 引用段落级定位: 给 wiki 顶部引用补 heading_path +
+        # 整句 excerpt + 完整句子的简介 (不再半截话)
+        if wiki_top and wiki_raw.get(wiki_top.path):
+            content = wiki_raw[wiki_top.path]
+            if wiki_top.citations:
+                heading = find_heading(content, wiki_top.snippet)
+                if heading:
+                    wiki_top.citations[0].heading_path = heading
+                wiki_top.citations[0].excerpt = _sentence_slice(
+                    _strip_frontmatter(content), 800
+                )
+            wiki_top.snippet = _snippet_around(content, wiki_top.snippet)
         # RAG 侧展示文本: 清洗后给足 2000 字符 (完整为主, 不再 300 残段)
         rag_display = _clean_rag_display(rag_answer, 2000)
+        # 其余 wiki 命中的完整呈现 (title/path/snippet/content)
+        wiki_more = [
+            {"title": h.title, "path": h.path, "snippet": h.snippet,
+             "content": wiki_contents.get(h.path, "")}
+            for h in wiki_hits[1:] if h.path
+        ]
         if wiki_top is None and not rag_answer:
             if chat_answer:
                 resp.results.append({
@@ -349,7 +365,7 @@ class FusionOrchestrator:
         if compared is None:
             # LLM 不可用: 降级为单源并列 (设计文档 §9.3)
             if wiki_top:
-                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content})
+                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content, "wiki_more": wiki_more})
             if rag_answer:
                 resp.results.append({
                     "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,
@@ -359,13 +375,13 @@ class FusionOrchestrator:
             resp.notes.append("M2 降级: LLM 不可用, 单源并列输出")
             return
 
-        all_citations = (wiki_top.citations if wiki_top else []) + rag_citations
+        all_citations = (wiki_top.citations if wiki_top else []) + [c for h in wiki_hits[1:] for c in h.citations] + rag_citations
         if compared.get("consistent"):
             # 强制接地: 无引用不输出合并结论 (宁缺毋滥, 守 faithfulness)
             if not all_citations:
                 resp.notes.append("M2 合并结论无引用支撑, 降级为并列输出")
                 if wiki_top:
-                    resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content})
+                    resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content, "wiki_more": wiki_more})
                 if rag_answer:
                     resp.results.append({
                         "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,
@@ -382,13 +398,14 @@ class FusionOrchestrator:
                     "provenance": ["wiki", "rag", "M2"],
                     "citations": [c.to_dict() for c in all_citations],
                     "wiki_excerpt": wiki_content,
+                    "wiki_more": wiki_more,
                     "rag_excerpt": rag_display,
                 }
             )
         else:
             resp.conflicts.append(compared.get("conflict") or {})
             if wiki_top:
-                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "content": wiki_content})
+                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "content": wiki_content, "wiki_more": wiki_more})
             if rag_answer:
                 resp.results.append({
                     "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,

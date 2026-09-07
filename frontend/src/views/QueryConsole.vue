@@ -159,6 +159,11 @@
             <div class="cit-title">📄 wiki 原文</div>
             <div class="ri-snippet">{{ r.wiki_excerpt || r.content }}</div>
           </div>
+          <!-- 其余 wiki 命中的完整原文 (用户要"尽可能全", 内网实调) -->
+          <div v-for="(w, wi) in r.wiki_more || []" :key="'wm' + wi" class="ri-source-block">
+            <div class="cit-title">📄 wiki 原文 · {{ w.path }}</div>
+            <div class="ri-snippet">{{ w.content || w.snippet }}</div>
+          </div>
           <div v-if="r.rag_excerpt" class="ri-source-block">
             <div class="cit-title">🧩 RAG 原文</div>
             <div class="ri-snippet">{{ r.rag_excerpt }}</div>
