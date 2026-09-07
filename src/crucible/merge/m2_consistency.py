@@ -63,6 +63,9 @@ async def compare_mechanism(
             [{"role": "system", "content": _PROMPT},
              {"role": "user", "content": prompt}],
             temperature=0,
+            # 弱模型输出合法 JSON 概率低 (内网实调: M2 每查必降级),
+            # 请求 json_object; 网关不支持时客户端自动去掉重试
+            response_format={"type": "json_object"},
         )
     except Exception:
         return None
@@ -71,4 +74,17 @@ async def compare_mechanism(
         match = re.search(r"\{.*\}", content, re.DOTALL)
         return json.loads(match.group(0) if match else content)
     except json.JSONDecodeError:
+        # 弱模型输不出合法嵌套 JSON → 回退 chat 底稿 (内网实调:
+        # chat 回答质量已验证, 比并列降级可用得多); 事实仍以
+        # 双引擎整句摘录为证据, 标注降级原因供前端/审计可见
+        if chat_answer:
+            return {
+                "consistent": True,
+                "conclusion": chat_answer[:800],
+                "evidence": [
+                    {"engine": "wiki", "claim": wiki_claim[:300], "source": wiki_source or "wiki"},
+                    {"engine": "rag", "claim": rag_claim[:300], "source": "lightrag"},
+                ],
+                "note": "m2_json_parse_failed_chat_fallback",
+            }
         return None

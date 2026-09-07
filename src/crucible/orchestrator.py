@@ -382,7 +382,7 @@ class FusionOrchestrator:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content, "wiki_more": wiki_more})
             if rag_answer:
                 resp.results.append({
-                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,
+                    "kind": "entity", "name": "RAG 原文证据", "snippet": rag_display,
                     "provenance": ["rag"], "confidence": "degraded",
                     "citations": [c.to_dict() for c in rag_citations],
                 })
@@ -390,6 +390,8 @@ class FusionOrchestrator:
             return
 
         all_citations = (wiki_top.citations if wiki_top else []) + [c for h in wiki_hits[1:] for c in h.citations] + rag_citations
+        if compared.get("note"):
+            resp.notes.append(f"M2降级: {compared['note']}")
         if compared.get("consistent"):
             # 强制接地: 无引用不输出合并结论 (宁缺毋滥, 守 faithfulness)
             if not all_citations:
@@ -398,7 +400,7 @@ class FusionOrchestrator:
                     resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content, "wiki_more": wiki_more})
                 if rag_answer:
                     resp.results.append({
-                        "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,
+                        "kind": "entity", "name": "RAG 原文证据", "snippet": rag_display,
                         "provenance": ["rag"], "confidence": "degraded",
                         "citations": [c.to_dict() for c in rag_citations],
                     })
@@ -422,7 +424,7 @@ class FusionOrchestrator:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "content": wiki_content, "wiki_more": wiki_more})
             if rag_answer:
                 resp.results.append({
-                    "kind": "entity", "name": "LightRAG 结论", "snippet": rag_display,
+                    "kind": "entity", "name": "RAG 原文证据", "snippet": rag_display,
                     "provenance": ["rag"],
                     "citations": [c.to_dict() for c in rag_citations],
                 })
