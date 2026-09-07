@@ -142,6 +142,16 @@
             <el-tag v-if="r.confidence" size="small" type="success">{{ r.confidence }}</el-tag>
           </div>
           <div v-if="r.snippet" class="ri-snippet">{{ r.snippet }}</div>
+          <!-- M2 结论正文: 之前只渲染 snippet, conclusion 结果没有该字段 → 正文消失 (内网实调) -->
+          <div v-if="r.conclusion" class="ri-conclusion">{{ r.conclusion }}</div>
+          <div v-if="r.evidence?.length" class="ri-evidence">
+            <div class="cit-title">🧾 双引擎证据</div>
+            <div v-for="(ev, ei) in r.evidence" :key="ei" class="ev-item">
+              <el-tag size="small" :type="ev.engine === 'wiki' ? 'primary' : 'success'">{{ ev.engine }}</el-tag>
+              <span class="ev-claim">{{ ev.claim }}</span>
+              <span v-if="ev.source" class="ev-source">— {{ ev.source }}</span>
+            </div>
+          </div>
           <div v-if="r.note" class="ri-note">📌 {{ r.note }}</div>
           <div v-if="r.path" class="ri-path">📄 {{ r.path }}</div>
           <div v-if="r.citations?.length" class="ri-citations">
@@ -355,6 +365,11 @@ async function run() {
 .ri-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ri-name { font-weight: 600; margin-right: 4px; }
 .ri-snippet { margin-top: 6px; color: #303133; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+.ri-conclusion { margin-top: 6px; color: #303133; white-space: pre-wrap; font-size: 14px; line-height: 1.7; font-weight: 500; }
+.ri-evidence { margin-top: 8px; background: #f8fafc; border-radius: 4px; padding: 8px 10px; }
+.ev-item { display: flex; align-items: baseline; gap: 6px; margin: 4px 0; font-size: 13px; }
+.ev-claim { color: #303133; }
+.ev-source { color: #909399; font-size: 12px; }
 .ri-note { margin-top: 4px; color: #b8860b; font-size: 12px; }
 .ri-path { margin-top: 4px; color: #909399; font-size: 12px; }
 .ri-citations { margin-top: 8px; background: #f8fafc; border-radius: 6px; padding: 8px 10px; }
