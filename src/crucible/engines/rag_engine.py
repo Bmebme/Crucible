@@ -185,6 +185,10 @@ class RagEngine:
                     st_model.encode, texts, normalize_embeddings=True
                 )
 
+            # 分块大小显式固定 1200 tokens (F 策略; 内网实调要求)。
+            # 优先级: addon_params > CHUNK_F_SIZE env > ctor > CHUNK_SIZE,
+            # 实例创建时读取, 对新摄入文档生效 (已入队文档快照不受影响)
+            os.environ.setdefault("CHUNK_F_SIZE", "1200")
             self._rag = LightRAG(
                 working_dir=self._workdir,
                 llm_model_func=llm_model_func,
