@@ -7,12 +7,16 @@
 """
 from __future__ import annotations
 
+import logging
 import re
+import time
 from typing import Any
 
 import httpx
 
 from ..schemas import Citation, WikiHit
+
+logger = logging.getLogger("crucible.wiki")
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
@@ -39,6 +43,7 @@ class WikiEngine:
         self.base_url = base_url.rstrip("/")
 
     async def search(self, project_id: str, query: str, limit: int = 8) -> list[WikiHit]:
+        t0 = time.monotonic()
         async with httpx.AsyncClient(**_CLIENT_KW) as client:
             resp = await client.post(
                 f"{self.base_url}/api/v1/projects/{project_id}/search",
@@ -46,7 +51,16 @@ class WikiEngine:
             )
             data = resp.json()
         if not data.get("ok"):
+            logger.warning(
+                "wiki search FAILED: %s '%s' HTTP %s (%.2fs)",
+                project_id, query[:60], resp.status_code, time.monotonic() - t0,
+            )
             return []
+        n = len(data.get("results") or [])
+        logger.info(
+            "wiki search: %s '%s' -> %d hits (%.2fs)",
+            project_id, query[:60], n, time.monotonic() - t0,
+        )
         hits: list[WikiHit] = []
         for r in data.get("results") or []:
             path = r.get("path", "")
@@ -68,6 +82,7 @@ class WikiEngine:
 
     async def read_page_content(self, project_id: str, path: str) -> str:
         """整页原文 (引用层: 跳转原文用)。失败返回空串。"""
+        t0 = time.monotonic()
         try:
             async with httpx.AsyncClient(**_CLIENT_KW) as client:
                 resp = await client.get(
@@ -75,11 +90,18 @@ class WikiEngine:
                     params={"path": path},
                 )
                 if resp.status_code != 200:
+                    logger.warning(
+                        "wiki page read FAILED: %s %s HTTP %s (%.2fs)",
+                        project_id, path, resp.status_code, time.monotonic() - t0,
+                    )
                     return ""
                 data = resp.json()
-        except Exception:
+        except Exception as e:
+            logger.warning("wiki page read FAILED: %s %s (%s)", project_id, path, e)
             return ""
         content = data.get("content", "")
+        logger.info("wiki page read: %s %s (%d chars, %.2fs)",
+                    project_id, path, len(content), time.monotonic() - t0)
         return content if isinstance(content, str) else ""
 
     async def list_pages(self, project_id: str) -> list[str]:
@@ -88,6 +110,7 @@ class WikiEngine:
         注意: files API 返回的是树结构 (isDir + children), 需递归展开;
         index/log/overview 是导航页, 不属于枚举实体, 过滤掉。
         """
+        t0 = time.monotonic()
         async with httpx.AsyncClient(**_CLIENT_KW) as client:
             resp = await client.get(
                 f"{self.base_url}/api/v1/projects/{project_id}/files",
@@ -95,6 +118,8 @@ class WikiEngine:
             )
             data = resp.json()
         if not data.get("ok"):
+            logger.warning("wiki list_pages FAILED: %s HTTP %s (%.2fs)",
+                           project_id, resp.status_code, time.monotonic() - t0)
             return []
 
         paths: list[str] = []
@@ -114,6 +139,8 @@ class WikiEngine:
                     paths.append(rel)
 
         walk(data.get("files") or [])
+        logger.info("wiki list_pages: %s -> %d pages (%.2fs)",
+                    project_id, len(paths), time.monotonic() - t0)
         return paths
 
     async def read_page_frontmatter(self, project_id: str, path: str) -> dict[str, Any]:
