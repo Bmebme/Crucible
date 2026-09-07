@@ -53,6 +53,7 @@ async def chat_complete(
         headers["Authorization"] = f"Bearer {config.llm_api_key}"
 
     t0 = time.monotonic()
+    logger.info("llm call 开始: model=%s", config.llm_model)
     url = f"{config.llm_base.rstrip('/')}/chat/completions"
     async with httpx.AsyncClient(timeout=timeout, trust_env=False) as c:
         r = await c.post(url, headers=headers, json=payload)

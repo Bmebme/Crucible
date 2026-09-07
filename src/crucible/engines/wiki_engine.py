@@ -89,7 +89,10 @@ class WikiEngine:
         由上层降级为空。
         """
         t0 = time.monotonic()
-        async with httpx.AsyncClient(timeout=600.0, trust_env=False) as client:
+        logger.info("wiki chat 开始: %s '%s' (内部: 检索+LLM 生成, 慢模型分钟级)",
+                    project_id, query[:60])
+        # 上限 240s: chat 参考是可降级项, 不该无限拖住查询 (内网实调)
+        async with httpx.AsyncClient(timeout=240.0, trust_env=False) as client:
             resp = await client.post(
                 f"{self.base_url}/api/v1/projects/{project_id}/chat",
                 json={"message": query, "mode": mode, "topK": 8},
