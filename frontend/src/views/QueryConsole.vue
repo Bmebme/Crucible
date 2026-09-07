@@ -88,6 +88,9 @@
           <template v-if="result.routing.confidence != null">· {{ result.routing.confidence === 0 ? '兜底' : result.routing.confidence }}</template>
         </el-tag>
         <span class="count">{{ result.results?.length ?? 0 }} 项</span>
+        <el-tag v-if="restoredAt" size="small" type="warning">
+          上次结果 · {{ new Date(restoredAt).toLocaleTimeString('zh-CN', { hour12: false }) }}
+        </el-tag>
       </template>
 
       <!-- 分段耗时 (内网实调需求: 直观看到钱花在哪) -->
@@ -258,6 +261,8 @@ const timeoutMin = ref(Number(localStorage.getItem('crucible-query-timeout-min')
 function persistTimeout() {
   localStorage.setItem('crucible-query-timeout-min', String(timeoutMin.value))
 }
+// 恢复的上次结果标记: 避免旧结果冒充新查询 (内网实调: 每次看到相同输出)
+const restoredAt = ref(0)
 const enumOpen = ref<string[]>([])
 const enumGroups = ref<{ groups: Record<string, any[]>; wikiCount: number; ragCount: number }>({
   groups: {}, wikiCount: 0, ragCount: 0,
@@ -332,7 +337,7 @@ function saveLastQuery() {
     localStorage.setItem(LAST_QUERY_KEY, JSON.stringify({
       query: query.value, mode: mode.value, projectId: projectId.value,
       env: env.value, aliasMode: aliasMode.value, historyText: historyText.value,
-      result: result.value, notes: notes.value,
+      result: result.value, notes: notes.value, ts: Date.now(),
     }))
   } catch { /* ignore */ }
 }
@@ -350,6 +355,7 @@ function restoreLastQuery() {
     historyText.value = s.historyText ?? ''
     result.value = s.result ?? null
     notes.value = s.notes ?? []
+    restoredAt.value = s.ts ?? Date.now()
     if (result.value?.routing?.query_type === 'Q1') {
       buildEnumGroups(result.value.results ?? [])
     }
@@ -392,6 +398,7 @@ async function run() {
     else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value }, timeoutMin.value * 60000)
     result.value = data
     notes.value = data.notes ?? []
+    restoredAt.value = 0
     saveLastQuery()
     if (data.routing?.query_type === 'Q1') {
       buildEnumGroups(data.results ?? [])
