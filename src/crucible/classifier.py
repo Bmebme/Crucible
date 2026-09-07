@@ -127,13 +127,20 @@ async def classify_by_llm(query: str, config: Config) -> IntentConfig | None:
 
 async def classify(query: str, config: Config) -> IntentConfig:
     """两段式判别。规则未命中且 LLM 未给出高置信结果时走保守策略
-    (全通道召回, 合并层按结果形态决定)。"""
+    (全通道召回, 合并层按结果形态决定)。
+
+    CRUCIBLE_CLASSIFY_MODE=rule 时跳过 LLM 兜底 (弱模型环境:
+    尽量减少 LLM 自行发挥点, 内网实调要求)。
+    """
+    import os
+
     ruled = classify_by_rules(query)
     if ruled is not None:
         return ruled
-    llm_result = await classify_by_llm(query, config)
-    if llm_result is not None:
-        return llm_result
+    if os.environ.get("CRUCIBLE_CLASSIFY_MODE") != "rule":
+        llm_result = await classify_by_llm(query, config)
+        if llm_result is not None:
+            return llm_result
     return IntentConfig(
         query_type=QueryType.MECHANISM,
         confidence=0.0,
