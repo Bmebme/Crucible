@@ -3,7 +3,7 @@ import axios from 'axios'
 // dev 走 vite 代理 (/api → 后端), 生产同源 (FastAPI 托管 dist)
 const baseURL = import.meta.env.DEV ? '/api' : ''
 
-export const api = axios.create({ baseURL, timeout: 300000 })
+export const api = axios.create({ baseURL, timeout: 600000 })
 
 export interface QueryRequest {
   query: string
@@ -13,18 +13,18 @@ export interface QueryRequest {
   alias_mode?: string
 }
 
-export async function fusionQuery(req: QueryRequest) {
-  const { data } = await api.post('/fusion/query', req)
+export async function fusionQuery(req: QueryRequest, timeout?: number) {
+  const { data } = await api.post('/fusion/query', req, { timeout })
   return data
 }
 
-export async function fusionEnum(hint: string, project_id: string, alias_mode?: string, summarize = true) {
-  const { data } = await api.post('/fusion/enum', { hint, project_id, alias_mode, summarize })
+export async function fusionEnum(hint: string, project_id: string, alias_mode?: string, summarize = true, timeout?: number) {
+  const { data } = await api.post('/fusion/enum', { hint, project_id, alias_mode, summarize }, { timeout })
   return data
 }
 
-export async function fusionExperience(query: string, project_id: string, env: string) {
-  const { data } = await api.post('/fusion/experience', { query, project_id, env })
+export async function fusionExperience(query: string, project_id: string, env: string, timeout?: number) {
+  const { data } = await api.post('/fusion/experience', { query, project_id, env }, { timeout })
   return data
 }
 

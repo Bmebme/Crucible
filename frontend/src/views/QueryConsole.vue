@@ -24,6 +24,11 @@
         <el-form-item v-if="mode === 'experience'" label="环境">
           <el-input v-model="env" placeholder="staging / production" style="width: 140px" />
         </el-form-item>
+        <el-form-item label="等待上限">
+          <el-select v-model="timeoutMin" style="width: 110px" @change="persistTimeout">
+            <el-option v-for="m in [3, 5, 10, 20, 30]" :key="m" :label="m + ' 分钟'" :value="m" />
+          </el-select>
+        </el-form-item>
       </el-form>
 
       <el-input
@@ -248,6 +253,11 @@ const pagePath = ref('')
 const pageContent = ref('')
 const prediction = ref<any>(null)
 let predictTimer: any = null
+// 查询等待上限 (分钟, 本地持久化; 内网慢模型实调: 默认 10)
+const timeoutMin = ref(Number(localStorage.getItem('crucible-query-timeout-min') || 10))
+function persistTimeout() {
+  localStorage.setItem('crucible-query-timeout-min', String(timeoutMin.value))
+}
 const enumOpen = ref<string[]>([])
 const enumGroups = ref<{ groups: Record<string, any[]>; wikiCount: number; ragCount: number }>({
   groups: {}, wikiCount: 0, ragCount: 0,
@@ -341,9 +351,9 @@ async function run() {
   try {
     const history = historyText.value.split('\n').map((s) => s.trim()).filter(Boolean)
     let data: any
-    if (mode.value === 'enum') data = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value)
-    else if (mode.value === 'experience') data = await fusionExperience(query.value.trim(), projectId.value, env.value)
-    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value })
+    if (mode.value === 'enum') data = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value, true, timeoutMin.value * 60000)
+    else if (mode.value === 'experience') data = await fusionExperience(query.value.trim(), projectId.value, env.value, timeoutMin.value * 60000)
+    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value }, timeoutMin.value * 60000)
     result.value = data
     notes.value = data.notes ?? []
     if (data.routing?.query_type === 'Q1') {
@@ -351,7 +361,7 @@ async function run() {
       // 融合查询入口问出 Q1: 补一次导读 (文字化回答)
       if (!data.summary) {
         try {
-          const e = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value)
+          const e = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value, true, timeoutMin.value * 60000)
           result.value = { ...data, summary: e.summary ?? '' }
         } catch { /* 导读失败保留纯清单 */ }
       }
