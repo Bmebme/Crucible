@@ -292,19 +292,36 @@ class FusionOrchestrator:
             resp.timings[key] = resp.timings.get(key, 0.0) + (time.monotonic() - t1)
             return r
 
-        async def safe_chat() -> str:
+        async def safe_chat() -> tuple[str, list[dict]]:
             try:
                 return await self.wiki.chat_answer(self.project_id, query)
             except Exception as e:
                 logger.warning("wiki chat 参考回答获取失败: %s", e)
-                return ""
+                return "", []
 
-        wiki_hits, rag_answer, rag_context, chat_answer = await asyncio.gather(
+        wiki_hits, rag_answer, rag_context, chat_result = await asyncio.gather(
             timed("wiki召回", self.wiki.search(self.project_id, query, limit=3)),
             timed("rag召回", self.rag.query(self.project_path, query, mode="hybrid")),
             timed("rag上下文", self.rag.query_context(self.project_path, query, mode="hybrid")),
             timed("chat参考", safe_chat()),
         )
+        chat_answer, chat_refs = chat_result
+        # 用户契约: chat 内部检索到的页面更详实 → 其引用页作为 wiki
+        # 证据来源, 本服务搜索降为兜底 (内网实调: 自有搜索被霸榜页
+        # 挤占, chat 引用页才是真正详实的)
+        if chat_refs:
+            wiki_hits = [
+                WikiHit(
+                    title=r.get("title") or r.get("path", ""),
+                    path=r.get("path", ""),
+                    snippet=(r.get("snippet") or "")[:500],
+                    citations=[Citation(source="wiki", path=r.get("path", ""),
+                                        excerpt=(r.get("snippet") or "")[:500])]
+                    if r.get("path") else [],
+                )
+                for r in chat_refs
+            ]
+            resp.notes.append(f"wiki侧使用 chat 引用页 ({len(wiki_hits)} 页)")
         # 引用层: wiki 命中自带引用; rag 侧从检索上下文 chunk 摘原文
         rag_citations = [
             Citation(

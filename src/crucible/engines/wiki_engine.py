@@ -81,12 +81,12 @@ class WikiEngine:
             )
         return hits
 
-    async def chat_answer(self, project_id: str, query: str, mode: str = "deep") -> str:
-        """调 llm-wiki chat 拿完整参考回答 (非流式聚合)。
+    async def chat_answer(self, project_id: str, query: str, mode: str = "deep") -> tuple[str, list[dict]]:
+        """调 llm-wiki chat 拿完整参考回答 + 其引用页 (非流式聚合)。
 
-        融合层的第三个参考输入 (内网实调: chat 的完整回答质量好,
-        作为叙述底稿进 M2, 事实仍以双引擎证据为准)。失败抛异常,
-        由上层降级为空。
+        返回 (content, references)。内网实调: chat 内部检索到的页面
+        更详实, 其引用页直接作为 wiki 证据来源 (本服务搜索降为兜底)。
+        失败抛异常, 由上层降级。
         """
         t0 = time.monotonic()
         logger.info("wiki chat 开始: %s '%s' (内部: 检索+LLM 生成, 慢模型分钟级)",
@@ -103,11 +103,12 @@ class WikiEngine:
             raise RuntimeError(f"chat ok=false: {str(data)[:200]}")
         msg = data.get("message") or {}
         content = msg.get("content", "") if isinstance(msg, dict) else ""
+        refs = [r for r in (data.get("references") or []) if isinstance(r, dict)]
         logger.info(
-            "wiki chat: %s '%s' -> %d chars (%.2fs)",
-            project_id, query[:60], len(content), time.monotonic() - t0,
+            "wiki chat: %s '%s' -> %d chars, %d refs (%.2fs)",
+            project_id, query[:60], len(content), len(refs), time.monotonic() - t0,
         )
-        return content if isinstance(content, str) else ""
+        return (content if isinstance(content, str) else ""), refs
 
     async def read_page_content(self, project_id: str, path: str) -> str:
         """整页原文 (引用层: 跳转原文用)。失败返回空串。"""
