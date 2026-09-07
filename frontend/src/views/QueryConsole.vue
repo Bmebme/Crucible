@@ -324,13 +324,49 @@ async function openPage(path: string) {
 
 const placeholder = ref('例如: MAE 有哪些外部接口？')
 
+// 上次问答持久化: 切走/刷新不丢结果 (内网实调 bug)
+const LAST_QUERY_KEY = 'crucible-last-query'
+
+function saveLastQuery() {
+  try {
+    localStorage.setItem(LAST_QUERY_KEY, JSON.stringify({
+      query: query.value, mode: mode.value, projectId: projectId.value,
+      env: env.value, aliasMode: aliasMode.value, historyText: historyText.value,
+      result: result.value, notes: notes.value,
+    }))
+  } catch { /* ignore */ }
+}
+
+function restoreLastQuery() {
+  try {
+    const raw = localStorage.getItem(LAST_QUERY_KEY)
+    if (!raw) return false
+    const s = JSON.parse(raw)
+    query.value = s.query ?? ''
+    mode.value = s.mode ?? 'query'
+    projectId.value = s.projectId ?? ''
+    env.value = s.env ?? 'staging'
+    aliasMode.value = s.aliasMode ?? 'l2+l3'
+    historyText.value = s.historyText ?? ''
+    result.value = s.result ?? null
+    notes.value = s.notes ?? []
+    if (result.value?.routing?.query_type === 'Q1') {
+      buildEnumGroups(result.value.results ?? [])
+    }
+    return true
+  } catch { return false }
+}
+
 onMounted(async () => {
   try {
     projects.value = await listProjects()
-    projectId.value = projects.value[0]?.id ?? ''
+    if (!projects.value.some((p: any) => p.id === projectId.value)) {
+      projectId.value = projects.value[0]?.id ?? ''
+    }
   } catch (e: any) {
     ElMessage.warning('后端未连接: ' + (e?.message ?? e))
   }
+  restoreLastQuery()
 })
 
 function qtypeColor(t: string) {
@@ -356,6 +392,7 @@ async function run() {
     else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value }, timeoutMin.value * 60000)
     result.value = data
     notes.value = data.notes ?? []
+    saveLastQuery()
     if (data.routing?.query_type === 'Q1') {
       buildEnumGroups(data.results ?? [])
       // 融合查询入口问出 Q1: 补一次导读 (文字化回答)
@@ -363,6 +400,7 @@ async function run() {
         try {
           const e = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value, true, timeoutMin.value * 60000)
           result.value = { ...data, summary: e.summary ?? '' }
+          saveLastQuery()
         } catch { /* 导读失败保留纯清单 */ }
       }
     }
