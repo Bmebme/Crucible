@@ -42,17 +42,23 @@ async function load() {
   const cats = [...new Set(data.nodes.map((n: any) => n.type))].map((t: any) => ({ name: t }))
 
   // 高度随节点数自适应 (节点少时不留大片空白, 内网实调反馈)
-  chartHeight.value = Math.min(680, Math.max(320, 240 + nodes.length * 22))
+  chartHeight.value = Math.min(640, Math.max(240, 200 + nodes.length * 18))
 
   echarts.getInstanceByDom(chart.value!)?.dispose()
   const inst = echarts.init(chart.value!)
+  const small = nodes.length < 30
   inst.setOption({
     tooltip: {},
-    legend: [{ data: cats.map((c: any) => c.name), type: 'scroll', bottom: 0 }],
+    // 图例放顶部: 底部不留图例条, 小图视觉不再"下面空一大块"
+    legend: [{ data: cats.map((c: any) => c.name), type: 'scroll', top: 0 }],
     series: [{
       type: 'graph', layout: 'force', roam: true,
       data: nodes, links: edges, categories: cats,
-      force: { repulsion: 260, edgeLength: [40, 140] },
+      // 小图加大斥力铺开画布, 大图保持紧凑 (空白感主要来自小图)
+      force: small
+        ? { repulsion: 420, edgeLength: [30, 90] }
+        : { repulsion: 260, edgeLength: [40, 140] },
+      layoutCenter: ['50%', '50%'],
       label: { show: true, fontSize: 10, position: 'right' },
       lineStyle: { opacity: 0.35 },
       emphasis: { focus: 'adjacency' },
