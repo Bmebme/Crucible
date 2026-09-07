@@ -6,10 +6,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger("crucible.orchestrator")
 
 from .classifier import classify, merge_mode, rewrite_if_needed
 from .config import Config
@@ -275,10 +278,18 @@ class FusionOrchestrator:
             resp.timings[key] = resp.timings.get(key, 0.0) + (time.monotonic() - t1)
             return r
 
-        wiki_hits, rag_answer, rag_context = await asyncio.gather(
+        async def safe_chat() -> str:
+            try:
+                return await self.wiki.chat_answer(self.project_id, query)
+            except Exception as e:
+                logger.warning("wiki chat 参考回答获取失败: %s", e)
+                return ""
+
+        wiki_hits, rag_answer, rag_context, chat_answer = await asyncio.gather(
             timed("wiki召回", self.wiki.search(self.project_id, query, limit=3)),
             timed("rag召回", self.rag.query(self.project_path, query, mode="hybrid")),
             timed("rag上下文", self.rag.query_context(self.project_path, query, mode="hybrid")),
+            timed("chat参考", safe_chat()),
         )
         # 引用层: wiki 命中自带引用; rag 侧从检索上下文 chunk 摘原文
         rag_citations = [
@@ -314,7 +325,15 @@ class FusionOrchestrator:
         # RAG 侧展示文本: 清洗后给足 2000 字符 (完整为主, 不再 300 残段)
         rag_display = _clean_rag_display(rag_answer, 2000)
         if wiki_top is None and not rag_answer:
-            resp.notes.append("两引擎均无召回")
+            if chat_answer:
+                resp.results.append({
+                    "kind": "reference", "name": "llm-wiki chat 参考",
+                    "snippet": _sentence_slice(chat_answer, 2000),
+                    "provenance": ["wiki-chat"], "confidence": "degraded",
+                })
+                resp.notes.append("两引擎无召回, 仅返回 chat 参考回答")
+            else:
+                resp.notes.append("两引擎均无召回")
             return
 
         t2 = time.monotonic()
@@ -324,6 +343,7 @@ class FusionOrchestrator:
             rag_claim=rag_answer[:600],
             rag_source="lightrag",
             config=self.config,
+            chat_answer=chat_answer,
         )
         resp.timings["合并"] = time.monotonic() - t2
         if compared is None:

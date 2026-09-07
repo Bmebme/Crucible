@@ -80,6 +80,31 @@ class WikiEngine:
             )
         return hits
 
+    async def chat_answer(self, project_id: str, query: str, mode: str = "deep") -> str:
+        """调 llm-wiki chat 拿完整参考回答 (非流式聚合)。
+
+        融合层的第三个参考输入 (内网实调: chat 的完整回答质量好,
+        作为叙述底稿进 M2, 事实仍以双引擎证据为准)。失败抛异常,
+        由上层降级为空。
+        """
+        t0 = time.monotonic()
+        async with httpx.AsyncClient(timeout=600.0, trust_env=False) as client:
+            resp = await client.post(
+                f"{self.base_url}/api/v1/projects/{project_id}/chat",
+                json={"message": query, "mode": mode, "topK": 8},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"chat ok=false: {str(data)[:200]}")
+        msg = data.get("message") or {}
+        content = msg.get("content", "") if isinstance(msg, dict) else ""
+        logger.info(
+            "wiki chat: %s '%s' -> %d chars (%.2fs)",
+            project_id, query[:60], len(content), time.monotonic() - t0,
+        )
+        return content if isinstance(content, str) else ""
+
     async def read_page_content(self, project_id: str, path: str) -> str:
         """整页原文 (引用层: 跳转原文用)。失败返回空串。"""
         t0 = time.monotonic()
