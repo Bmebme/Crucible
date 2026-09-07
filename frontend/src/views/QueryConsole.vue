@@ -149,7 +149,7 @@
             <el-tag v-if="r.weight != null" size="small" type="warning">w={{ r.weight }}</el-tag>
             <el-tag v-if="r.confidence" size="small" type="success">{{ r.confidence }}</el-tag>
           </div>
-          <div v-if="r.snippet" class="ri-snippet">{{ r.snippet }}</div>
+          <div v-if="r.snippet" class="ri-md" v-html="renderMd(r.snippet)" />
           <!-- M2 结论正文: 之前只渲染 snippet, conclusion 结果没有该字段 → 正文消失 (内网实调) -->
           <div v-if="r.conclusion" class="ri-conclusion">{{ r.conclusion }}</div>
           <div v-if="r.evidence?.length" class="ri-evidence">
@@ -162,24 +162,23 @@
           </div>
           <div v-if="r.note" class="ri-note">📌 {{ r.note }}</div>
           <div v-if="r.path" class="ri-path">📄 {{ r.path }}</div>
-          <!-- 双引擎完整原文块 (用户要"全": wiki 原文 + RAG 清洗正文, 长不截短) -->
+          <!-- 双引擎完整原文块 (markdown 渲染) -->
           <div v-if="r.wiki_excerpt || r.content" class="ri-source-block">
             <div class="cit-title">📄 wiki 原文</div>
-            <div class="ri-snippet">{{ r.wiki_excerpt || r.content }}</div>
+            <div class="ri-md" v-html="renderMd(r.wiki_excerpt || r.content)" />
           </div>
-          <!-- 其余 wiki 命中的完整原文 (用户要"尽可能全", 内网实调) -->
           <div v-for="(w, wi) in r.wiki_more || []" :key="'wm' + wi" class="ri-source-block">
             <div class="cit-title">📄 wiki 原文 · {{ w.path }}</div>
-            <div class="ri-snippet">{{ w.content || w.snippet }}</div>
+            <div class="ri-md" v-html="renderMd(w.content || w.snippet)" />
           </div>
           <div v-if="r.rag_excerpt" class="ri-source-block">
             <div class="cit-title">🧩 RAG 原文</div>
-            <div class="ri-snippet">{{ r.rag_excerpt }}</div>
+            <div class="ri-md" v-html="renderMd(r.rag_excerpt)" />
           </div>
           <!-- 拟合层: LLM 整合结论 (自由文本, 分歧博弈, 以原文为准) -->
           <div v-if="r.kind === 'summary' && r.text" class="ri-source-block">
             <div class="cit-title">🎯 整合结论</div>
-            <div class="ri-conclusion">{{ r.text }}</div>
+            <div class="ri-md" v-html="renderMd(r.text)" />
           </div>
           <div v-if="r.citations?.length" class="ri-citations">
             <div class="cit-title">🔗 引用（{{ r.citations.length }}）</div>
@@ -244,7 +243,17 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { api, fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
+
+// 大段文本 (整合结论/wiki 原文/RAG 原文) 按 markdown 渲染
+// (内网实调: 纯文本显示导致 ## ** 等标记符号满天飞)
+function renderMd(text: string): string {
+  try {
+    return DOMPurify.sanitize(marked.parse(text || '') as string)
+  } catch { return '' }
+}
 
 const mode = ref('query')
 const projectId = ref('')
@@ -445,6 +454,12 @@ async function run() {
 .ev-claim { color: #303133; }
 .ev-source { color: #909399; font-size: 12px; }
 .ri-source-block { margin-top: 8px; background: #f8fafc; border-radius: 4px; padding: 8px 10px; }
+.ri-md { margin-top: 6px; color: #303133; font-size: 13px; line-height: 1.7; overflow-wrap: break-word; }
+.ri-md :deep(p) { margin: 4px 0; }
+.ri-md :deep(h1), .ri-md :deep(h2), .ri-md :deep(h3), .ri-md :deep(h4) { margin: 8px 0 4px; font-size: 14px; }
+.ri-md :deep(ul), .ri-md :deep(ol) { margin: 4px 0; padding-left: 20px; }
+.ri-md :deep(code) { background: #f0f2f5; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.ri-md :deep(pre) { background: #f0f2f5; padding: 8px; border-radius: 4px; overflow-x: auto; }
 .ri-note { margin-top: 4px; color: #b8860b; font-size: 12px; }
 .ri-path { margin-top: 4px; color: #909399; font-size: 12px; }
 .ri-citations { margin-top: 8px; background: #f8fafc; border-radius: 6px; padding: 8px 10px; }
