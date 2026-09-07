@@ -41,6 +41,10 @@ docker run -d --name crucible-pg --restart unless-stopped \
 
 echo "[3/6] 启动 llm-wiki (含 UI, 同端口 19828)"
 mkdir -p "$LLM_WIKI_STATE"
+# 非 x86_64 宿主 (Mac arm64 本地试跑) 薄层构建需显式 --platform;
+# 内网原生 amd64 不需要 (老 docker 兼容)
+PLATFORM_ARG=""
+if [ "$(uname -m)" != "x86_64" ]; then PLATFORM_ARG="--platform linux/amd64"; fi
 APPSTATE="$LLM_WIKI_STATE/app-state.json"
 if [ ! -f "$APPSTATE" ]; then
   cat > "$APPSTATE" <<'EOF'
@@ -74,6 +78,22 @@ s["activePresetId"] = preset_id
 json.dump(s, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 print(f"  → llmConfig + 自定义 preset 已写入 {p}")
 PYEOF
+# py-llm-wiki 薄层: 从 git 代码换后端+前端 (dist 已入 git), 失败退基础镜像
+PYWIKI_REPO=""
+for cand in "../py-llm-wiki" "../Py-llm-wiki" ".."; do
+  if [ -f "$cand/Dockerfile.thin" ]; then PYWIKI_REPO="$cand"; break; fi
+done
+if [ -n "$PYWIKI_REPO" ]; then
+  cd "$PYWIKI_REPO"
+  if docker build $PLATFORM_ARG -f Dockerfile.thin -t py-llm-wiki:amd64 .; then
+    echo "  ✓ py-llm-wiki 薄层构建完成 (最新代码+前端)"
+  else
+    echo "  ⚠ py-llm-wiki 薄层构建失败, 用基础镜像运行"
+  fi
+  cd - > /dev/null
+else
+  echo "  ⚠ 未找到 py-llm-wiki 仓库, 用基础镜像运行"
+fi
 docker rm -f crucible-llmwiki 2>/dev/null || true
 docker run -d --name crucible-llmwiki --restart unless-stopped \
   -p 19828:19828 \
@@ -105,10 +125,7 @@ mkdir -p "$DATA_ROOT"
 docker rm -f crucible-app 2>/dev/null || true
 # 应用薄层: 从 git 代码秒级构建 (依赖+模型在 crucible-base 基础镜像, 摆渡一次到位)
 # 薄层失败则退回基础镜像 (内含构建当日的代码, 功能可用只是旧一些)
-# 非 x86_64 宿主 (Mac arm64 本地试跑) 必须显式 --platform, 否则 buildkit
-# 按宿主架构找 crucible-base 的 arm64 manifest → 失败; 内网原生 amd64 无需
-PLATFORM_ARG=""
-if [ "$(uname -m)" != "x86_64" ]; then PLATFORM_ARG="--platform linux/amd64"; fi
+# (PLATFORM_ARG 在 [3/6] 定义)
 if [ -n "$REPO_DIR" ]; then
   cd "$REPO_DIR"
   # 构建输出不再吞掉: 卡住时能直接看到卡在哪一步 (内网排障实测)
