@@ -1,5 +1,5 @@
 <template>
-  <el-card shadow="never">
+  <el-card shadow="never" class="graph-card">
     <template #header>
       实体图浏览
       <el-select v-model="projectId" style="width: 140px; margin-left: 12px" @change="load">
@@ -68,8 +68,21 @@ async function load() {
 </script>
 
 <style scoped>
-/* 撑满视口: 100vh - (60px 顶栏 + 20px 上内边距 + ~56px 卡片头 + 20px 下内边距)
-   图区吃满页面, 力导向布局自会在整块画布内居中铺开 (内网实调) */
-.chart { height: calc(100vh - 170px); min-height: 400px; }
+/* 恰好贴合视口不出滚动条 (内网实调: 像素求和会差一点导致下拉):
+   卡片总高 = 100vh - (60 顶栏 + 20+20 主区上下内边距 + 少量余量),
+   卡片内部 flex 自适应 (头部多高都行), 图区吃剩余全部 */
+.graph-card {
+  height: calc(100vh - 108px);
+  display: flex;
+  flex-direction: column;
+}
+.graph-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  overflow: hidden;
+}
+.chart { flex: 1; min-height: 0; }
 .hint { font-size: 12px; color: #909399; margin-left: 12px; }
 </style>
