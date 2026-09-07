@@ -38,6 +38,26 @@ def _sentence_slice(text: str, max_chars: int = 800) -> str:
     return cut[:best] if best > 0 else cut
 
 
+_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
+# ASCII 树形/图例行 (│ ├ └ | mermaid 语法): 展示层噪音, 过滤
+_TREE_LINE_RE = re.compile(r"^[\s│├└┌┐┘└─|]+.*$", re.MULTILINE)
+
+
+def _clean_rag_display(text: str, max_chars: int = 600) -> str:
+    """RAG 展示文本清洗: LightRAG 混合输出 = LLM 文字 + 原文 chunk
+    (含 ASCII 树/mermaid 代码块), 直接截断呈现残缺乱码 (内网实调)。
+    剥代码块、滤树形行与 markdown 结构行, 只留成段正文再句界截断。"""
+    text = _CODE_BLOCK_RE.sub("", text or "")
+    text = "\n".join(
+        ln
+        for ln in text.splitlines()
+        if not _TREE_LINE_RE.match(ln)
+        and not ln.strip().startswith(("- [", "---", "## ", "```"))
+        and ln.strip()
+    )
+    return _sentence_slice(text, max_chars)
+
+
 def _strip_frontmatter(content: str) -> str:
     """引用 excerpt 去掉 YAML frontmatter (verify_state 等元数据不该进原文引用)。"""
     content = content or ""
@@ -306,7 +326,7 @@ class FusionOrchestrator:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
             if rag_answer:
                 resp.results.append({
-                    "kind": "entity", "name": "LightRAG 结论", "snippet": _sentence_slice(rag_answer, 300),
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": _clean_rag_display(rag_answer),
                     "provenance": ["rag"], "confidence": "degraded",
                     "citations": [c.to_dict() for c in rag_citations],
                 })
@@ -322,7 +342,7 @@ class FusionOrchestrator:
                     resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded"})
                 if rag_answer:
                     resp.results.append({
-                        "kind": "entity", "name": "LightRAG 结论", "snippet": _sentence_slice(rag_answer, 300),
+                        "kind": "entity", "name": "LightRAG 结论", "snippet": _clean_rag_display(rag_answer),
                         "provenance": ["rag"], "confidence": "degraded",
                         "citations": [c.to_dict() for c in rag_citations],
                     })
@@ -343,7 +363,7 @@ class FusionOrchestrator:
                 resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"]})
             if rag_answer:
                 resp.results.append({
-                    "kind": "entity", "name": "LightRAG 结论", "snippet": _sentence_slice(rag_answer, 300),
+                    "kind": "entity", "name": "LightRAG 结论", "snippet": _clean_rag_display(rag_answer),
                     "provenance": ["rag"],
                     "citations": [c.to_dict() for c in rag_citations],
                 })
