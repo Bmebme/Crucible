@@ -366,66 +366,45 @@ class FusionOrchestrator:
                 resp.notes.append("两引擎均无召回")
             return
 
+        # ── 拟合层 (可选): LLM 对照小结, 自由文本无 JSON 契约 ──
+        # 弱模型友好; 失败/不可用不影响主形态 (内网实调: 严格 JSON
+        # 契约导致每查必降级, 融合输出不可用)
         t2 = time.monotonic()
-        compared = await m2_consistency.compare_mechanism(
-            wiki_claim=(f"{wiki_top.title}: {wiki_top.snippet}" if wiki_top else ""),
+        summary = await m2_consistency.compare_mechanism(
+            # 以原文为准: 把双引擎的完整原文交给整合层 (而非片段)
+            wiki_claim=(wiki_content or (f"{wiki_top.title}: {wiki_top.snippet}" if wiki_top else "")),
             wiki_source=wiki_top.path if wiki_top else "",
-            rag_claim=rag_answer[:600],
+            rag_claim=(rag_display or rag_answer[:600]),
             rag_source="lightrag",
             config=self.config,
             chat_answer=chat_answer,
         )
-        resp.timings["合并"] = time.monotonic() - t2
-        if compared is None:
-            # LLM 不可用: 降级为单源并列 (设计文档 §9.3)
-            if wiki_top:
-                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content, "wiki_more": wiki_more})
-            if rag_answer:
-                resp.results.append({
-                    "kind": "entity", "name": "RAG 原文证据", "snippet": rag_display,
-                    "provenance": ["rag"], "confidence": "degraded",
-                    "citations": [c.to_dict() for c in rag_citations],
-                })
-            resp.notes.append("M2 降级: LLM 不可用, 单源并列输出")
-            return
-
-        all_citations = (wiki_top.citations if wiki_top else []) + [c for h in wiki_hits[1:] for c in h.citations] + rag_citations
-        if compared.get("note"):
-            resp.notes.append(f"M2降级: {compared['note']}")
-        if compared.get("consistent"):
-            # 强制接地: 无引用不输出合并结论 (宁缺毋滥, 守 faithfulness)
-            if not all_citations:
-                resp.notes.append("M2 合并结论无引用支撑, 降级为并列输出")
-                if wiki_top:
-                    resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "confidence": "degraded", "content": wiki_content, "wiki_more": wiki_more})
-                if rag_answer:
-                    resp.results.append({
-                        "kind": "entity", "name": "RAG 原文证据", "snippet": rag_display,
-                        "provenance": ["rag"], "confidence": "degraded",
-                        "citations": [c.to_dict() for c in rag_citations],
-                    })
-                return
-            resp.results.append(
-                {
-                    "kind": "conclusion",
-                    "conclusion": compared.get("conclusion"),
-                    "evidence": compared.get("evidence"),
-                    "confidence": "high",
-                    "provenance": ["wiki", "rag", "M2"],
-                    "citations": [c.to_dict() for c in all_citations],
-                    "wiki_excerpt": wiki_content,
-                    "wiki_more": wiki_more,
-                    "rag_excerpt": rag_display,
-                }
-            )
+        resp.timings["整合"] = time.monotonic() - t2
+        if summary:
+            resp.results.append({
+                "kind": "summary",
+                "name": "整合结论",
+                "text": summary,
+                "provenance": ["M2"],
+            })
+            resp.notes.append("M2整合: ok")
         else:
-            resp.conflicts.append(compared.get("conflict") or {})
-            if wiki_top:
-                resp.results.append({**wiki_top.to_dict(), "provenance": ["wiki"], "content": wiki_content, "wiki_more": wiki_more})
-            if rag_answer:
-                resp.results.append({
-                    "kind": "entity", "name": "RAG 原文证据", "snippet": rag_display,
-                    "provenance": ["rag"],
-                    "citations": [c.to_dict() for c in rag_citations],
-                })
-            resp.notes.append("冲突对峙输出: 不裁决, 由 Agent/人裁决后回写")
+            resp.notes.append("M2整合: LLM 不可用 (双引擎证据块不受影响)")
+
+        # ── 主形态: 物理分离的双引擎证据 (零 LLM 依赖, 永远完整) ──
+        if wiki_top:
+            resp.results.append({
+                **wiki_top.to_dict(),
+                "kind": "wiki_evidence",
+                "provenance": ["wiki"],
+                "content": wiki_content,
+                "wiki_more": wiki_more,
+            })
+        if rag_answer:
+            resp.results.append({
+                "kind": "rag_evidence",
+                "name": "RAG 原文证据",
+                "snippet": rag_display,
+                "provenance": ["rag"],
+                "citations": [c.to_dict() for c in rag_citations],
+            })

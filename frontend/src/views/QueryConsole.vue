@@ -176,6 +176,11 @@
             <div class="cit-title">🧩 RAG 原文</div>
             <div class="ri-snippet">{{ r.rag_excerpt }}</div>
           </div>
+          <!-- 拟合层: LLM 整合结论 (自由文本, 分歧博弈, 以原文为准) -->
+          <div v-if="r.kind === 'summary' && r.text" class="ri-source-block">
+            <div class="cit-title">🎯 整合结论</div>
+            <div class="ri-conclusion">{{ r.text }}</div>
+          </div>
           <div v-if="r.citations?.length" class="ri-citations">
             <div class="cit-title">🔗 引用（{{ r.citations.length }}）</div>
             <div v-for="(c, ci) in r.citations" :key="ci" class="cit-item">
