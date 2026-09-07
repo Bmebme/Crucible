@@ -69,3 +69,34 @@ async def compare_mechanism(
         lines = [(m.group(1) if m else ln) for ln, m in zip(lines, matches)]
         content = "\n".join(lines)
     return content or None
+
+
+_CLEANUP_PROMPT = """下面是一段知识库整合输出的原文。请提取其中关于该问题的核心结论, 重新写成 2-4 句连贯的正文。
+
+规则: 去掉开场白、去掉编号和列表格式、去掉对任务要求的复述、去掉与结论无关的说明文字; 保留全部事实细节与来源标注; 不改写事实。
+
+直接输出结论正文, 不要任何其他内容。
+
+原文:
+{content}
+"""
+
+
+async def extract_conclusion(content: str, config: Config) -> str | None:
+    """二次问答: 从整合输出里提取干净结论 (弱模型专用开关)。
+
+    弱模型擅长简单任务 —— 提取比整合容易, 输出质量稳定 (内网实调
+    需求)。LLM 失败返回 None, 上层回退用原始整合输出。
+    """
+    if not config.llm_api_key or not content.strip():
+        return None
+    try:
+        out = await chat_complete(
+            config,
+            [{"role": "user", "content": _CLEANUP_PROMPT.format(content=content[:2500])}],
+            temperature=0,
+        )
+    except Exception:
+        return None
+    out = out.strip()
+    return out or None

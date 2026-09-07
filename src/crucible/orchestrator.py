@@ -398,6 +398,19 @@ class FusionOrchestrator:
         )
         resp.timings["整合"] = time.monotonic() - t2
         if summary:
+            # 弱模型专用开关: 二次问答提取干净结论 (内网实调:
+            # 一次整合输出带开场白/编号/复述, 提取任务简单稳定)
+            import os as _os
+
+            if _os.environ.get("CRUCIBLE_M2_CLEANUP") == "on":
+                t3 = time.monotonic()
+                cleaned = await m2_consistency.extract_conclusion(summary, self.config)
+                resp.timings["结论提取"] = time.monotonic() - t3
+                if cleaned:
+                    summary = cleaned
+                    resp.notes.append("M2结论提取: ok (弱模型开关)")
+                else:
+                    resp.notes.append("M2结论提取: LLM 不可用, 用原始整合输出")
             resp.results.append({
                 "kind": "summary",
                 "name": "整合结论",
