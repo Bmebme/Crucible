@@ -30,10 +30,16 @@
       <template #header>已注册项目</template>
       <el-table :data="projects" size="small">
         <el-table-column prop="id" label="ID" width="140" />
-        <el-table-column prop="path" label="路径" min-width="280" show-overflow-tooltip />
+        <el-table-column prop="path" label="路径" min-width="240" show-overflow-tooltip />
         <el-table-column prop="alias_mode" label="对齐模式" width="100" />
         <el-table-column prop="created_at" label="注册时间" width="180">
           <template #default="{ row }">{{ (row.created_at || '').replace('T', ' ').slice(0, 19) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="190">
+          <template #default="{ row }">
+            <el-button size="small" @click="openWiki(row)">打开 wiki</el-button>
+            <el-button size="small" type="danger" plain @click="remove(row)">删除</el-button>
+          </template>
         </el-table-column>
       </el-table>
     </el-card>
@@ -42,8 +48,8 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { listProjects, registerProject } from '../api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { deleteProject, listProjects, registerProject } from '../api'
 
 const projects = ref<any[]>([])
 const saving = ref(false)
@@ -68,6 +74,27 @@ async function save() {
     ElMessage.error(e?.response?.data?.detail ?? e?.message)
   } finally {
     saving.value = false
+  }
+}
+
+function openWiki(row: any) {
+  // llm-wiki 与 crucible 同宿主机 (19828), 带 ?project=<id> 深链直达该项目
+  window.open(`http://${location.hostname}:19828/?project=${encodeURIComponent(row.id)}`, '_blank')
+}
+
+async function remove(row: any) {
+  try {
+    await ElMessageBox.confirm(
+      `注销项目「${row.id}」? 仅移除注册 (kb-data 数据与 llm-wiki 侧均不动)。`,
+      '删除项目', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+    )
+  } catch { return }
+  try {
+    await deleteProject(row.id)
+    ElMessage.success('已注销')
+    await refresh()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message)
   }
 }
 </script>

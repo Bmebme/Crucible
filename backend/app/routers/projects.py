@@ -27,6 +27,18 @@ class ProjectCreate(BaseModel):
     aliases_file: str = "kb-aliases.yaml"
 
 
+@router.delete("/{project_id}")
+async def delete_project(project_id: str) -> dict:
+    """注销项目: 仅移除 crucible 注册行; 磁盘数据 (kb-data) 与
+    llm-wiki 侧项目均不动 (用户决定是否另行清理)。"""
+    async with session_scope() as s:
+        row = await s.get(Project, project_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"项目 {project_id} 未注册")
+        await s.delete(row)
+    return {"ok": True, "deleted": project_id}
+
+
 @router.get("")
 async def projects() -> list[dict]:
     rows = await list_projects()

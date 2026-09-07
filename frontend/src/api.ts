@@ -38,6 +38,11 @@ export async function registerProject(p: Record<string, string>) {
   return data
 }
 
+export async function deleteProject(id: string) {
+  const { data } = await api.delete(`/projects/${id}`)
+  return data
+}
+
 export async function uploadDocument(
   project_id: string,
   file: File,
