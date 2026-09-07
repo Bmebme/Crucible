@@ -58,15 +58,14 @@ async def compare_mechanism(
     except Exception:
         return None
     content = content.strip()
-    # 弱模型爱输出编号列表 (内网实调: 1/2/3 罗列或复述) → 仅当
-    # 所有非空行都是编号行时, 剥编号接成段落 (正常正文不受影响)
+    # 弱模型爱输出编号列表 (内网实调: 1/2/3 罗列, 含"引言+列表"
+    # 混合形态) → 有 ≥2 行编号时剥去编号前缀, 正文行原样保留
+    # (正常正文里的偶发 "1." 不会被误伤)
     import re as _re
 
     lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
-    if len(lines) >= 2 and all(
-        _re.match(r"^\d+[.、)）]\s*", ln) for ln in lines
-    ):
-        content = "。".join(
-            _re.sub(r"^\d+[.、)）]\s*", "", ln) for ln in lines
-        )
+    matches = [_re.match(r"^\d+[.、)）]\s*(.*)", ln) for ln in lines]
+    if sum(1 for m in matches if m) >= 2:
+        lines = [(m.group(1) if m else ln) for ln, m in zip(lines, matches)]
+        content = "\n".join(lines)
     return content or None
