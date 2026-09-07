@@ -133,6 +133,7 @@ class FusionResponse:
     differences: list[Difference] = field(default_factory=list)
     conflicts: list[dict] = field(default_factory=list)  # M2 冲突对峙 (不裁决)
     notes: list[str] = field(default_factory=list)
+    timings: dict[str, float] = field(default_factory=dict)  # 分段耗时 (前端直观测速)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -142,4 +143,5 @@ class FusionResponse:
             "differences": [d.to_dict() for d in self.differences],
             "conflicts": self.conflicts,
             "notes": self.notes,
+            "timings": self.timings,
         }

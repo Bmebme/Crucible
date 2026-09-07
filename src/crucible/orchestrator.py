@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -85,10 +86,12 @@ class FusionOrchestrator:
     ) -> FusionResponse:
         # 多轮追问: 先指代消解/省略补全 (§10.2), 所有引擎用消解后的查询。
         # history 为用户最近几轮提问 (最早在前)。
+        t0 = time.monotonic()
         resolved = await rewrite_if_needed(query, history, self.config)
         routing = await classify(resolved, self.config)
-        mode = merge_mode(routing.query_type)
         response = FusionResponse(query=query, routing=routing)
+        response.timings["判别"] = time.monotonic() - t0
+        mode = merge_mode(routing.query_type)
         response.notes.append(f"merge_mode={mode}")
         if resolved != query:
             response.notes.append(f"rewritten_to={resolved}")
@@ -99,6 +102,7 @@ class FusionOrchestrator:
             await self._run_experience(resolved, response, env)
         else:
             await self._run_mechanism(resolved, response)
+        response.timings["总耗时"] = time.monotonic() - t0
 
         # 混合查询的子查询: 并行触发各自模式 (结果统一返回)
         for sub in routing.sub_queries:
@@ -130,9 +134,15 @@ class FusionOrchestrator:
         wiki 通道按 hint 检索相关页 (Q1 的「全」= 全部相关, 不是全库清单;
         list_pages 全量只作检索失败时的降级)。
         """
+        async def timed(key: str, coro):
+            t1 = time.monotonic()
+            r = await coro
+            resp.timings[key] = resp.timings.get(key, 0.0) + (time.monotonic() - t1)
+            return r
+
         wiki_hits, rag_entities = await asyncio.gather(
-            self.wiki.search(self.project_id, f"{query} 有哪些", limit=100),
-            self.rag.enumerate_entities(self.project_path, query),
+            timed("wiki召回", self.wiki.search(self.project_id, f"{query} 有哪些", limit=100)),
+            timed("rag召回", self.rag.enumerate_entities(self.project_path, query)),
         )
         wiki_pages = []
         for h in wiki_hits:
@@ -203,7 +213,9 @@ class FusionOrchestrator:
 
     async def _run_experience(self, query: str, resp: FusionResponse, env: str) -> None:
         """Q3: wiki verify_state 加权 → M3 状态排序 (原样引用)。"""
+        t1 = time.monotonic()
         hits: list[WikiHit] = await self.wiki.search(self.project_id, query, limit=20)
+        resp.timings["wiki召回"] = time.monotonic() - t1
         items: list[dict[str, Any]] = []
         for hit in hits:
             if hit.path and "verification" not in hit.path:
@@ -221,6 +233,7 @@ class FusionOrchestrator:
                 }
             )
         ordered = sort_by_verify_state(items, env=env, query=query)
+        resp.timings["合并"] = 0.0  # M3 纯排序无 LLM
         resp.results = [
             {
                 **h.item,
@@ -236,10 +249,16 @@ class FusionOrchestrator:
 
     async def _run_mechanism(self, query: str, resp: FusionResponse) -> None:
         """Q2: 双引擎召回 → M2 一致性比对 (LLM 只比对不重写) + 引用层接地。"""
+        async def timed(key: str, coro):
+            t1 = time.monotonic()
+            r = await coro
+            resp.timings[key] = resp.timings.get(key, 0.0) + (time.monotonic() - t1)
+            return r
+
         wiki_hits, rag_answer, rag_context = await asyncio.gather(
-            self.wiki.search(self.project_id, query, limit=3),
-            self.rag.query(self.project_path, query, mode="hybrid"),
-            self.rag.query_context(self.project_path, query, mode="hybrid"),
+            timed("wiki召回", self.wiki.search(self.project_id, query, limit=3)),
+            timed("rag召回", self.rag.query(self.project_path, query, mode="hybrid")),
+            timed("rag上下文", self.rag.query_context(self.project_path, query, mode="hybrid")),
         )
         # 引用层: wiki 命中自带引用; rag 侧从检索上下文 chunk 摘原文
         rag_citations = [
@@ -272,6 +291,7 @@ class FusionOrchestrator:
             resp.notes.append("两引擎均无召回")
             return
 
+        t2 = time.monotonic()
         compared = await m2_consistency.compare_mechanism(
             wiki_claim=(f"{wiki_top.title}: {wiki_top.snippet}" if wiki_top else ""),
             wiki_source=wiki_top.path if wiki_top else "",
@@ -279,6 +299,7 @@ class FusionOrchestrator:
             rag_source="lightrag",
             config=self.config,
         )
+        resp.timings["合并"] = time.monotonic() - t2
         if compared is None:
             # LLM 不可用: 降级为单源并列 (设计文档 §9.3)
             if wiki_top:

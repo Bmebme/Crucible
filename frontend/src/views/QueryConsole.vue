@@ -85,6 +85,14 @@
         <span class="count">{{ result.results?.length ?? 0 }} 项</span>
       </template>
 
+      <!-- 分段耗时 (内网实调需求: 直观看到钱花在哪) -->
+      <div v-if="result.timings && Object.keys(result.timings).length" class="timings">
+        <el-tag v-for="(v, k) in result.timings" :key="k" size="small" effect="plain"
+          :type="k === '总耗时' ? 'warning' : 'info'">
+          {{ k }} {{ Number(v).toFixed(1) }}s
+        </el-tag>
+      </div>
+
       <!-- 枚举型 (路由 Q1, 无论从哪个模式入口): 导读 + 分组清单 -->
       <div v-if="result.routing?.query_type === 'Q1' && result.results?.length">
         <el-alert
@@ -340,6 +348,7 @@ async function run() {
 .history-row { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .hint { font-size: 12px; color: #909399; }
 .notes { display: flex; flex-wrap: wrap; gap: 6px; }
+.timings { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .qtype { margin-left: 8px; }
 .count { float: right; color: #909399; font-size: 13px; }
 .result-item { padding: 10px 0; border-bottom: 1px dashed #e4e7ed; }
