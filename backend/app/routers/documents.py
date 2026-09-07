@@ -36,6 +36,7 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     subdir: str = Form(""),
+    source_subpath: str = Form(""),
 ) -> dict:
     filename = file.filename or "unnamed.md"
     proj = await get_project(project_id)
@@ -51,7 +52,7 @@ async def upload_document(
     background_tasks.add_task(
         run_ingestion,
         started["job_id"], project_id, project_path, filename, content, subdir,
-        proj.wiki_project_id or "",
+        proj.wiki_project_id or "", source_subpath,
     )
     return {
         "ok": True,

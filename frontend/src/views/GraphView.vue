@@ -7,18 +7,19 @@
       </el-select>
       <span class="hint">LightRAG 实体关系图 (按度数取中心子图, 悬停看描述)</span>
     </template>
-    <div ref="chart" class="chart" />
+    <div ref="chart" class="chart" :style="{ height: chartHeight + 'px' }" />
   </el-card>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import { api, listProjects } from '../api'
 
 const projectId = ref('')
 const projects = ref<Array<{ id: string }>>([])
 const chart = ref<HTMLElement>()
+const chartHeight = ref(480)
 
 onMounted(async () => {
   try {
@@ -40,6 +41,10 @@ async function load() {
   const edges = data.edges.map((e: any) => ({ source: e.s, target: e.t }))
   const cats = [...new Set(data.nodes.map((n: any) => n.type))].map((t: any) => ({ name: t }))
 
+  // 高度随节点数自适应 (节点少时不留大片空白, 内网实调反馈)
+  chartHeight.value = Math.min(680, Math.max(320, 240 + nodes.length * 22))
+
+  echarts.getInstanceByDom(chart.value!)?.dispose()
   const inst = echarts.init(chart.value!)
   inst.setOption({
     tooltip: {},
@@ -54,10 +59,13 @@ async function load() {
     }],
   })
   window.addEventListener('resize', () => inst.resize())
+  // 高度变化后同步画布
+  await nextTick()
+  inst.resize()
 }
 </script>
 
 <style scoped>
-.chart { height: 680px; }
+.chart { min-height: 320px; }
 .hint { font-size: 12px; color: #909399; margin-left: 12px; }
 </style>

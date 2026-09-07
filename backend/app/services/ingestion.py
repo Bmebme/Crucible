@@ -77,6 +77,7 @@ async def run_ingestion(
     content: bytes,
     subdir: str = "",
     wiki_project_id: str = "",
+    source_subpath: str = "",
 ) -> None:
     """摄入管线 (由端点以 BackgroundTasks 异步执行; 全程阶段可见)。"""
     ext = Path(filename).suffix.lower()
@@ -133,8 +134,18 @@ async def run_ingestion(
             target_dir = Path(project_path) / "wiki" / "verification"
             source_rel = str(Path("wiki") / "verification" / md_filename)
         else:
-            target_dir = Path(project_path) / "raw" / "sources"
-            source_rel = str(Path("raw") / "sources" / md_filename)
+            # 保留 wiki 相对子路径 (批量补摄入用): 防止不同子目录同名
+            # 文件在 raw/sources 平铺时互相覆盖 (内网实调发现文件数对不上)
+            sub_rel = Path(source_subpath) if source_subpath else Path(".")
+            parts = sub_rel.parts
+            if any(p in ("..", "", "/") or p.startswith(".") for p in parts if p):
+                sub_rel = Path(".")
+            if str(sub_rel) in (".", ""):
+                target_dir = Path(project_path) / "raw" / "sources"
+                source_rel = str(Path("raw") / "sources" / md_filename)
+            else:
+                target_dir = Path(project_path) / "raw" / "sources" / sub_rel
+                source_rel = str(Path("raw") / "sources" / sub_rel / md_filename)
         target_dir.mkdir(parents=True, exist_ok=True)
         target = target_dir / md_filename
         fd, tmp = tempfile.mkstemp(dir=str(target_dir), suffix=".md")
@@ -174,7 +185,8 @@ async def run_ingestion(
                     "chars": len(text), "channels": ["source", "rag"],
                     "source_path": source_rel,
                     "raw_path": originals_rel,
-                    "wiki_ingest": wiki_note},
+                    "wiki_ingest": wiki_note,
+                    "rag_note": "已入队, LightRAG 后台继续处理 (实体图逐步生成)"},
         )
     except Exception as e:
         await _fail(str(e))

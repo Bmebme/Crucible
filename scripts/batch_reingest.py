@@ -2,7 +2,10 @@
 """存量项目批量补摄入: 把老项目的 wiki md 过一遍 crucible 上传通道。
 
 用法 (宿主机 WSL, 需可访问 crucible 8080):
-  python3 scripts/batch_reingest.py <project_id> [crucible_base] [data_root]
+  python3 scripts/batch_reingest.py <project_id> [crucible_base] [data_root] [子目录]
+
+  [子目录] 可选: wiki 下的相对子目录 (如 wiki/组件 只传这个文件夹);
+  不填则扫整个 wiki 树。
 
 行为 (冲突防护):
   - 只扫 <data_root>/<project_id>/wiki/**/*.md
@@ -21,18 +24,27 @@ import httpx
 project_id = sys.argv[1]
 crucible = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:8080"
 data_root = Path(sys.argv[3]) if len(sys.argv) > 3 else Path.home() / "kb-data"
+subdir_rel = sys.argv[4] if len(sys.argv) > 4 else ""
 
 wiki_root = data_root / project_id / "wiki"
+if subdir_rel:
+    wiki_root = data_root / project_id / subdir_rel
 sources_root = data_root / project_id / "raw" / "sources"
 if not wiki_root.exists():
     print(f"未找到 wiki 目录: {wiki_root}")
     sys.exit(1)
 
+def _source_target(p: Path) -> Path:
+    """raw/sources 落点 = wiki 相对子路径 + 文件名 (防同名覆盖)。"""
+    rel = p.relative_to(wiki_root)
+    return sources_root / rel
+
+
 files = [p for p in sorted(wiki_root.rglob("*.md")) if p.is_file()]
 skipped_verif = [p for p in files if "verification" in p.parts]
 files = [p for p in files if "verification" not in p.parts]
-skipped_dup = [p for p in files if (sources_root / p.name).exists()]
-files = [p for p in files if not (sources_root / p.name).exists()]
+skipped_dup = [p for p in files if _source_target(p).exists()]
+files = [p for p in files if not _source_target(p).exists()]
 
 print(f"共 {len(files) + len(skipped_verif) + len(skipped_dup)} 个 md: "
       f"待传 {len(files)}, 跳过 verification {len(skipped_verif)}, "
@@ -42,10 +54,13 @@ ok = fail = 0
 with httpx.Client(timeout=1800.0, trust_env=False) as c:
     for p in files:
         try:
+            # source_subpath = wiki 相对目录 (不含文件名), sources 保留结构
+            rel_dir = p.relative_to(wiki_root).parent
+            subpath = "" if str(rel_dir) == "." else str(rel_dir)
             r = c.post(
                 f"{crucible}/projects/{project_id}/documents",
                 files={"file": (p.name, p.read_bytes(), "text/markdown")},
-                data={"subdir": ""},
+                data={"subdir": "", "source_subpath": subpath},
             )
             r.raise_for_status()
             j = r.json()
