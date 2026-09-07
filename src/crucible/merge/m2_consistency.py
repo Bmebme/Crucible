@@ -33,8 +33,10 @@ _PROMPT = """你是漏洞验证知识库的合并器。输入是 llm_wiki 与 Li
 约束：不得改写、综合、推测输入之外的机制事实；冲突时禁止选择其中一方。
 呈现要求：conclusion 输出 2-6 句完整段落回答 —— 参考 chat 回答的叙述
 方式与完整度，但每个事实必须能被 evidence 中的整句摘录支撑（有来源
-才可说），句子完整成句，禁止半句截断、禁止省略号；evidence 的 claim
-从输入原文中整句摘录、不缩写。
+才可说），句子完整成句，禁止半句截断、禁止省略号。
+evidence 必须且只能输出两条: 一条 engine=wiki (claim 从 llm_wiki 结论
+整句摘录, source 填 wiki 来源)、一条 engine=rag (claim 从 LightRAG 结论
+整句摘录, source 填 rag 来源), 不得省略任何一条、不得合成第三条。
 只输出 JSON。
 """
 
