@@ -24,7 +24,7 @@ _PROMPT = """你是漏洞验证知识库的合并器。下面是两个引擎对�
 ## llm-wiki chat 参考回答
 {chat_answer}
 
-直接输出整合后的完整回答。要求: 以原文为准, 每个论断在句末标注来源; 两库冲突时依据原文裁决并说明理由; 覆盖全部要点; 不编造输入之外的事实。不要复述这些要求, 不要列提纲, 直接给结论正文。
+直接输出整合后的完整回答。要求: 以原文为准, 每个论断在句末标注来源; 两库冲突时依据原文裁决并说明理由; 覆盖全部要点; 不编造输入之外的事实。输出必须是连续的自然段文字: 禁止数字编号 (1. 2. 3.)、禁止列表、禁止复述要求。
 """
 
 
@@ -58,4 +58,15 @@ async def compare_mechanism(
     except Exception:
         return None
     content = content.strip()
+    # 弱模型爱输出编号列表 (内网实调: 1/2/3 罗列或复述) → 仅当
+    # 所有非空行都是编号行时, 剥编号接成段落 (正常正文不受影响)
+    import re as _re
+
+    lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+    if len(lines) >= 2 and all(
+        _re.match(r"^\d+[.、)）]\s*", ln) for ln in lines
+    ):
+        content = "。".join(
+            _re.sub(r"^\d+[.、)）]\s*", "", ln) for ln in lines
+        )
     return content or None
