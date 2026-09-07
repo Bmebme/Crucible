@@ -80,7 +80,7 @@
         <el-tag v-if="result.routing" class="qtype" size="small"
           :type="qtypeColor(result.routing.query_type)">
           {{ result.routing.query_type }}
-          <template v-if="result.routing.confidence != null">· {{ result.routing.confidence }}</template>
+          <template v-if="result.routing.confidence != null">· {{ result.routing.confidence === 0 ? '兜底' : result.routing.confidence }}</template>
         </el-tag>
         <span class="count">{{ result.results?.length ?? 0 }} 项</span>
       </template>

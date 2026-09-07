@@ -64,7 +64,8 @@ class WikiEngine:
         hits: list[WikiHit] = []
         for r in data.get("results") or []:
             path = r.get("path", "")
-            snippet = (r.get("snippet") or "")[:200]
+            # 剥 frontmatter (evidence claim 与简介不再带 --- 元数据) 后取片段
+            snippet = _FRONTMATTER_RE.sub("", r.get("snippet") or "").strip()[:500]
             hits.append(
                 WikiHit(
                     title=r.get("title") or path,

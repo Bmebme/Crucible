@@ -297,7 +297,7 @@ class FusionOrchestrator:
                 source="rag",
                 chunk_id=c.reference_id,
                 heading_path=c.headings,
-                excerpt=_sentence_slice(c.content, 800),
+                excerpt=_clean_rag_display(c.content, 800),
             )
             for c in rag_context[:3]
         ]
