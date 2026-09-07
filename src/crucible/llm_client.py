@@ -20,6 +20,20 @@ from .config import Config
 
 logger = logging.getLogger("crucible.llm")
 
+# 共享连接池: 每次调用新建 client 会重复 DNS+TCP+TLS 握手,
+# 内网 DNS 慢时首包明显变慢 (内网实调: 第一次 llm call 慢)
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(
+            trust_env=False,
+            limits=httpx.Limits(max_keepalive_connections=8, keepalive_expiry=300),
+        )
+    return _client
+
 
 def _clean_fences(content: str) -> str:
     if content.lstrip().startswith("```"):
@@ -55,39 +69,39 @@ async def chat_complete(
     t0 = time.monotonic()
     logger.info("llm call 开始: model=%s", config.llm_model)
     url = f"{config.llm_base.rstrip('/')}/chat/completions"
-    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as c:
-        r = await c.post(url, headers=headers, json=payload)
-        if r.status_code == 400 and use_rf:
-            payload.pop("response_format", None)
-            r = await c.post(url, headers=headers, json=payload)
-        r.raise_for_status()
-        ct = r.headers.get("content-type", "")
-        text = r.text
-        if "event-stream" in ct or text.lstrip().startswith("data:"):
-            # SSE: 逐帧拼 delta.content
-            parts: list[str] = []
-            for line in text.splitlines():
-                if not line.startswith("data:"):
-                    continue
-                d = line[5:].strip()
-                if d == "[DONE]":
-                    break
-                try:
-                    obj = json.loads(d)
-                except json.JSONDecodeError:
-                    continue
-                choices = obj.get("choices") or []
-                if choices:
-                    delta = choices[0].get("delta") or {}
-                    if delta.get("content"):
-                        parts.append(delta["content"])
-            content = "".join(parts)
-        else:
-            obj = json.loads(text)
+    c = _get_client()
+    r = await c.post(url, headers=headers, json=payload, timeout=timeout)
+    if r.status_code == 400 and use_rf:
+        payload.pop("response_format", None)
+        r = await c.post(url, headers=headers, json=payload, timeout=timeout)
+    r.raise_for_status()
+    ct = r.headers.get("content-type", "")
+    text = r.text
+    if "event-stream" in ct or text.lstrip().startswith("data:"):
+        # SSE: 逐帧拼 delta.content
+        parts: list[str] = []
+        for line in text.splitlines():
+            if not line.startswith("data:"):
+                continue
+            d = line[5:].strip()
+            if d == "[DONE]":
+                break
+            try:
+                obj = json.loads(d)
+            except json.JSONDecodeError:
+                continue
             choices = obj.get("choices") or []
-            if not choices:
-                raise ValueError(f"网关响应无 choices: {text[:200]}")
-            content = choices[0].get("message", {}).get("content", "") or ""
+            if choices:
+                delta = choices[0].get("delta") or {}
+                if delta.get("content"):
+                    parts.append(delta["content"])
+        content = "".join(parts)
+    else:
+        obj = json.loads(text)
+        choices = obj.get("choices") or []
+        if not choices:
+            raise ValueError(f"网关响应无 choices: {text[:200]}")
+        content = choices[0].get("message", {}).get("content", "") or ""
     content = _clean_fences(content)
     logger.info(
         "llm call: model=%s (%.1fs, %d chars)",
