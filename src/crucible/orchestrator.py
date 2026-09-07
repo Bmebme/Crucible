@@ -46,11 +46,25 @@ _CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _TREE_LINE_RE = re.compile(r"^[\s│├└┌┐┘└─|]+.*$", re.MULTILINE)
 
 
+def _sanitize(text: str) -> str:
+    """字节级清洗: 剔除无效 UTF-8 与除 \\t\\n\\r 外的控制字符。
+
+    内网实调: 大段文本字段 (rag 引用 excerpt) 出现坏 JSON, 疑为
+    数据脏字节 (LightRAG chunk/网关输出混入异常序列)。所有进响应的
+    大文本统一过这里。
+    """
+    if not text:
+        return ""
+    text = text.encode("utf-8", errors="ignore").decode("utf-8")
+    return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
+
+
 def _clean_rag_display(text: str, max_chars: int = 600) -> str:
     """RAG 展示文本清洗: LightRAG 混合输出 = LLM 文字 + 原文 chunk
     (含 ASCII 树/mermaid 代码块), 直接截断呈现残缺乱码 (内网实调)。
     剥代码块、滤树形行与 markdown 结构行, 只留成段正文再句界截断。"""
-    text = _CODE_BLOCK_RE.sub("", text or "")
+    text = _sanitize(text)
+    text = _CODE_BLOCK_RE.sub("", text)
     text = "\n".join(
         ln
         for ln in text.splitlines()

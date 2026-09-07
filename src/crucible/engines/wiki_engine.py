@@ -131,6 +131,10 @@ class WikiEngine:
         content = data.get("content", "")
         logger.info("wiki page read: %s %s (%d chars, %.2fs)",
                     project_id, path, len(content), time.monotonic() - t0)
+        if isinstance(content, str):
+            # 字节级清洗 (无效 UTF-8/控制字符, 与 orchestrator._sanitize 同源)
+            content = content.encode("utf-8", errors="ignore").decode("utf-8")
+            content = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", content)
         return content if isinstance(content, str) else ""
 
     async def list_pages(self, project_id: str) -> list[str]:

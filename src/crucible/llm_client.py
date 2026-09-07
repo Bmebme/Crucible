@@ -103,6 +103,9 @@ async def chat_complete(
             raise ValueError(f"网关响应无 choices: {text[:200]}")
         content = choices[0].get("message", {}).get("content", "") or ""
     content = _clean_fences(content)
+    # 字节级清洗 (无效 UTF-8/控制字符, 网关输出可能混脏字节)
+    content = content.encode("utf-8", errors="ignore").decode("utf-8")
+    content = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", content)
     logger.info(
         "llm call: model=%s (%.1fs, %d chars)",
         config.llm_model, time.monotonic() - t0, len(content),
