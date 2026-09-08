@@ -83,6 +83,8 @@ async def chat_complete(
     if "event-stream" in ct or text.lstrip().startswith("data:"):
         # SSE: 逐帧拼 delta.content
         parts: list[str] = []
+        reasoning_chars = 0
+        reasoning_deltas = 0
         for line in text.splitlines():
             if not line.startswith("data:"):
                 continue
@@ -96,8 +98,19 @@ async def chat_complete(
             choices = obj.get("choices") or []
             if choices:
                 delta = choices[0].get("delta") or {}
+                rc = delta.get("reasoning_content")
+                if rc:
+                    reasoning_deltas += 1
+                    reasoning_chars += len(rc)
                 if delta.get("content"):
                     parts.append(delta["content"])
+        # 探测: thinking 类模型的思考可能走 reasoning_content 通道,
+        # 网关若把它并进 content 则思考混入正文 (内网实调)
+        if reasoning_deltas:
+            logger.info(
+                "llm reasoning 流检测: %d 帧, %d 字符 (已忽略, 仅 content 入正文)",
+                reasoning_deltas, reasoning_chars,
+            )
         content = "".join(parts)
     else:
         obj = json.loads(text)
