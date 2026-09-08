@@ -13,7 +13,7 @@ from typing import Any
 from ..llm_client import chat_complete
 from ..config import Config
 
-_PROMPT = """你是漏洞验证知识库的合并器。下面是两个引擎对同一机制问题的检索结论和 chat 参考回答。
+_PROMPT_SIMPLE = """你是漏洞验证知识库的合并器。下面是两个引擎对同一机制问题的检索结论和 chat 参考回答。
 
 ## llm_wiki 结论
 {wiki_claim}
@@ -24,9 +24,13 @@ _PROMPT = """你是漏洞验证知识库的合并器。下面是两个引擎对�
 ## llm-wiki chat 参考回答
 {chat_answer}
 
+请用自己的话写出一段连贯的整合回答, 直接回答该机制问题。要求: 只写与问题直接相关的事实, 不照抄输入段落; 每个论断在句末标注来源 (【wiki: 来源】或【rag】); 两库冲突时依据原文裁决并说明理由; 覆盖全部要点; 不编造输入之外的事实; 连续自然段。
+"""
+
+_PROMPT_WEAK = _PROMPT_SIMPLE + """
 严格按以下模板输出 (两个标记各出现一次):
 
-【结论】在这里用自己的话写一段连贯的整合回答, 直接回答该机制问题。只写与问题直接相关的事实, 不照抄输入段落; 每个论断在句末标注来源 (【wiki: 来源】或【rag】); 两库冲突时依据输入原文说明采信哪一方及理由; 不编造输入之外的事实。
+【结论】在这里写整合回答正文。
 
 【依据】在这里逐条列出支撑结论的事实要点, 每条带来源标注。
 
@@ -41,10 +45,13 @@ async def compare_mechanism(
     rag_source: str,
     config: Config,
     chat_answer: str = "",
+    weak: bool = False,
 ) -> str | None:
-    """双引擎对照小结 (自由文本, 无 JSON 契约)。
+    """双引擎整合回答 (自由文本, 无 JSON 契约)。
 
-    弱模型友好 (内网实调: 严格嵌套 JSON 输不出 → 每查必降级)。
+    weak=True (弱模型模式, 前端开关): 模板锚点 prompt + 确定性
+    解析 (标记前思维过程丢弃) + 归一化 (剥编号/滤任务行)。
+    weak=False: 简洁 prompt, 输出原样 (强模型无需兜底, 保持干净)。
     LLM 不可用/失败返回 None —— 主形态 (分离证据) 不受影响。
     """
     if not config.llm_api_key:
@@ -52,7 +59,8 @@ async def compare_mechanism(
     # 弱模型 + 超长上下文 = 预算花在思维步骤, 结论被截断 (内网实调):
     # 整合输入缩到 800×3 (全文在证据块里, 整合只需足够综合),
     # 显式 max_tokens 防止走网关默认短额度
-    prompt = _PROMPT.format(
+    tmpl = _PROMPT_WEAK if weak else _PROMPT_SIMPLE
+    prompt = tmpl.format(
         wiki_claim=f"{wiki_claim[:800]}（来源: {wiki_source or 'unknown'}）",
         rag_claim=f"{rag_claim[:800]}（来源: {rag_source or 'unknown'}）",
         chat_answer=chat_answer[:800] or "（无）",
@@ -60,14 +68,16 @@ async def compare_mechanism(
     try:
         content = await chat_complete(
             config,
-            [{"role": "system", "content": _PROMPT},
+            [{"role": "system", "content": tmpl},
              {"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=2000,
         )
     except Exception:
         return None
-    return normalize_summary(_parse_template(content)) or None
+    if weak:
+        return normalize_summary(_parse_template(content)) or None
+    return content.strip() or None
 
 
 def _parse_template(content: str) -> str:

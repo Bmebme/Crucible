@@ -399,6 +399,7 @@ class FusionOrchestrator:
             rag_source="lightrag",
             config=self.config,
             chat_answer=chat_answer,
+            weak=cleanup,  # 弱模型全套兜底 (模板锚点/归一化) 随前端开关
         )
         resp.timings["整合"] = time.monotonic() - t2
         if summary:
