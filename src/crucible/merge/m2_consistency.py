@@ -24,7 +24,12 @@ _PROMPT = """你是漏洞验证知识库的合并器。下面是两个引擎对�
 ## llm-wiki chat 参考回答
 {chat_answer}
 
-直接输出整合后的完整回答。要求: 以原文为准, 每个论断在句末标注来源; 两库冲突时依据原文裁决并说明理由; 覆盖全部要点; 不编造输入之外的事实。输出必须是连续的自然段文字: 禁止数字编号 (1. 2. 3.)、禁止列表、禁止复述要求。
+请用自己的话写出一段连贯的整合回答, 直接回答该机制问题。要求:
+- 只写与问题直接相关的事实, **不照抄输入段落 (禁止整段复制输入内容)**
+- 每个论断在句末标注来源 (【wiki: 来源】或【rag】)
+- 两库说法冲突时, 依据输入原文说明采信哪一方及理由
+- 覆盖全部要点, 不编造输入之外的事实
+- 连续自然段, 禁止数字编号、禁止列表、禁止复述要求
 """
 
 
@@ -84,6 +89,15 @@ def normalize_summary(content: str) -> str:
         r"^(理解任务|分析输入|分析输入内容|识别冲突|整合结论|归纳总结|提炼结论|总结要点)\s*[:：]?\s*$"
     )
     lines = [ln for ln in lines if not _TASK_LINE_RE.match(ln)]
+    # ③ 结论段定位 (弱模型会整段搬运原文, 不靠它定位 —— 确定性启发式:
+    #    找最后一条以结论引导词开头的行, 从那里截到结尾; 无引导词保留全部)
+    _CONCLUSION_MARKERS = ("结论", "综上", "总结", "因此", "最终", "整合后", "直接回答")
+    marker_pos = -1
+    for i, ln in enumerate(lines):
+        if any(ln.startswith(m) for m in _CONCLUSION_MARKERS):
+            marker_pos = i
+    if marker_pos > 0:
+        lines = lines[marker_pos:]
     return "\n".join(lines)
 
 
