@@ -426,7 +426,10 @@ class FusionOrchestrator:
                 resp.results.append({
                     "kind": "summary",
                     "name": "整合结论 (chat 参考)",
-                    "text": _sentence_slice(chat_answer, 2000),
+                    # 兜底路径同样过弱模型归一化 (剥编号/滤思维行)
+                    "text": _sentence_slice(
+                        m2_consistency.normalize_summary(chat_answer), 2000
+                    ),
                     "provenance": ["wiki-chat"],
                 })
 
