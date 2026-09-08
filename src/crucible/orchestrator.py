@@ -420,7 +420,15 @@ class FusionOrchestrator:
             })
             resp.notes.append("M2整合: ok")
         else:
-            resp.notes.append("M2整合: LLM 不可用 (双引擎证据块不受影响)")
+            # 整合失败兜底: chat 参考回答进结论块 (绝不空窗, 内网实调)
+            resp.notes.append("M2整合: LLM 不可用, 结论用 chat 参考回答")
+            if chat_answer:
+                resp.results.append({
+                    "kind": "summary",
+                    "name": "整合结论 (chat 参考)",
+                    "text": _sentence_slice(chat_answer, 2000),
+                    "provenance": ["wiki-chat"],
+                })
 
         # ── 主形态: 物理分离的双引擎证据 (零 LLM 依赖, 永远完整) ──
         if wiki_top:
