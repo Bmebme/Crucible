@@ -255,7 +255,12 @@ import { api, fusionEnum, fusionExperience, fusionQuery, listProjects } from '..
 function renderMd(text: string): string {
   try {
     return DOMPurify.sanitize(marked.parse(text || '') as string)
-  } catch { return '' }
+  } catch {
+    // 渲染失败降级为原文 (绝不能返回空导致内容块空白, 内网实调)
+    const el = document.createElement('div')
+    el.textContent = text || ''
+    return el.innerHTML
+  }
 }
 
 const mode = ref('query')
