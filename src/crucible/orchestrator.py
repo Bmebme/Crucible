@@ -365,7 +365,10 @@ class FusionOrchestrator:
                 )
             wiki_top.snippet = _snippet_around(content, wiki_top.snippet)
         # RAG 侧展示文本: 清洗后给足 2000 字符 (完整为主, 不再 300 残段)
-        rag_display = _clean_rag_display(rag_answer, 2000)
+        # 再过弱模型归一化: LightRAG 的 hybrid 回答同样可能带思维步骤
+        rag_display = m2_consistency.normalize_summary(
+            _clean_rag_display(rag_answer, 2000)
+        )
         # 其余 wiki 命中的完整呈现 (title/path/snippet/content)
         wiki_more = [
             {"title": h.title, "path": h.path, "snippet": h.snippet,
