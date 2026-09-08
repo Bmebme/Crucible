@@ -119,7 +119,8 @@ class FusionOrchestrator:
         self.rag = RagEngine(self.config)
 
     async def run(
-        self, query: str, *, env: str = "", history: list[str] | None = None
+        self, query: str, *, env: str = "", history: list[str] | None = None,
+        cleanup: bool = False,
     ) -> FusionResponse:
         # 多轮追问: 先指代消解/省略补全 (§10.2), 所有引擎用消解后的查询。
         # history 为用户最近几轮提问 (最早在前)。
@@ -138,7 +139,7 @@ class FusionOrchestrator:
         elif routing.query_type == QueryType.EXPERIENCE:
             await self._run_experience(resolved, response, env)
         else:
-            await self._run_mechanism(resolved, response)
+            await self._run_mechanism(resolved, response, cleanup)
         response.timings["总耗时"] = time.monotonic() - t0
 
         # 混合查询的子查询: 并行触发各自模式 (结果统一返回)
@@ -284,7 +285,7 @@ class FusionOrchestrator:
         ]
         resp.notes.append(f"verified_weighted={len(resp.results)}")
 
-    async def _run_mechanism(self, query: str, resp: FusionResponse) -> None:
+    async def _run_mechanism(self, query: str, resp: FusionResponse, cleanup: bool = False) -> None:
         """Q2: 双引擎召回 → M2 一致性比对 (LLM 只比对不重写) + 引用层接地。"""
         async def timed(key: str, coro):
             t1 = time.monotonic()
@@ -402,7 +403,7 @@ class FusionOrchestrator:
             # 一次整合输出带开场白/编号/复述, 提取任务简单稳定)
             import os as _os
 
-            if _os.environ.get("CRUCIBLE_M2_CLEANUP") == "on":
+            if cleanup or _os.environ.get("CRUCIBLE_M2_CLEANUP") == "on":
                 t3 = time.monotonic()
                 cleaned = await m2_consistency.extract_conclusion(summary, self.config)
                 resp.timings["结论提取"] = time.monotonic() - t3

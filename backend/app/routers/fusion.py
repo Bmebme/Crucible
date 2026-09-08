@@ -20,6 +20,7 @@ class QueryRequest(BaseModel):
     env: str = ""
     alias_mode: str | None = None
     include_related: bool = False  # 软隔离: 关联产品低权重参考区
+    cleanup: bool = False  # 弱模型开关: 整合结论二次提取 (前端可调)
 
 
 class EnumRequest(BaseModel):
@@ -150,7 +151,7 @@ async def fusion_query(req: QueryRequest) -> dict:
     if req.alias_mode:
         orch.config.alias_mode = req.alias_mode
     try:
-        resp = await orch.run(req.query, env=req.env, history=req.history or None)
+        resp = await orch.run(req.query, env=req.env, history=req.history or None, cleanup=req.cleanup)
     except Exception as e:  # 引擎级异常兜底, 不向外抛栈
         raise HTTPException(status_code=500, detail=f"fusion error: {e}") from e
     data = resp.to_dict()
@@ -233,7 +234,7 @@ async def fusion_experience(req: ExperienceRequest) -> dict:
         rag_workdir=proj.rag_workdir,
     )
     try:
-        resp = await orch.run(req.query, env=req.env, history=req.history or None)
+        resp = await orch.run(req.query, env=req.env, history=req.history or None, cleanup=req.cleanup)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"fusion error: {e}") from e
     data = resp.to_dict()

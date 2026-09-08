@@ -29,6 +29,9 @@
             <el-option v-for="m in [3, 5, 10, 20, 30]" :key="m" :label="m + ' 分钟'" :value="m" />
           </el-select>
         </el-form-item>
+        <el-form-item label="结论提取(弱模型)">
+          <el-switch v-model="cleanup" @change="persistCleanup" />
+        </el-form-item>
       </el-form>
 
       <el-input
@@ -275,6 +278,11 @@ const timeoutMin = ref(Number(localStorage.getItem('crucible-query-timeout-min')
 function persistTimeout() {
   localStorage.setItem('crucible-query-timeout-min', String(timeoutMin.value))
 }
+// 弱模型专用: 整合结论二次提取 (前端开关, 本地持久化)
+const cleanup = ref(localStorage.getItem('crucible-query-cleanup') === 'on')
+function persistCleanup() {
+  localStorage.setItem('crucible-query-cleanup', cleanup.value ? 'on' : 'off')
+}
 // 恢复的上次结果标记: 避免旧结果冒充新查询 (内网实调: 每次看到相同输出)
 const restoredAt = ref(0)
 const enumOpen = ref<string[]>([])
@@ -409,7 +417,7 @@ async function run() {
     let data: any
     if (mode.value === 'enum') data = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value, true, timeoutMin.value * 60000)
     else if (mode.value === 'experience') data = await fusionExperience(query.value.trim(), projectId.value, env.value, timeoutMin.value * 60000)
-    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value }, timeoutMin.value * 60000)
+    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value, cleanup: cleanup.value }, timeoutMin.value * 60000)
     result.value = data
     notes.value = data.notes ?? []
     restoredAt.value = 0

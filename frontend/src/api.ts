@@ -11,6 +11,7 @@ export interface QueryRequest {
   history?: string[]
   env?: string
   alias_mode?: string
+  cleanup?: boolean
 }
 
 export async function fusionQuery(req: QueryRequest, timeout?: number) {
