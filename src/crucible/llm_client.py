@@ -47,6 +47,7 @@ async def chat_complete(
     temperature: float = 0,
     response_format: dict | None = None,
     timeout: float = 600.0,
+    max_tokens: int | None = None,
 ) -> str:
     """OpenAI 兼容 chat completions → 纯文本 content。
 
@@ -59,6 +60,8 @@ async def chat_complete(
         "temperature": temperature,
         "stream": True,
     }
+    if max_tokens:
+        payload["max_tokens"] = max_tokens
     use_rf = bool(response_format)
     if use_rf:
         payload["response_format"] = response_format

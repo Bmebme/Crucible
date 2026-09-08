@@ -43,10 +43,13 @@ async def compare_mechanism(
     """
     if not config.llm_api_key:
         return None
+    # 弱模型 + 超长上下文 = 预算花在思维步骤, 结论被截断 (内网实调):
+    # 整合输入缩到 800×3 (全文在证据块里, 整合只需足够综合),
+    # 显式 max_tokens 防止走网关默认短额度
     prompt = _PROMPT.format(
-        wiki_claim=f"{wiki_claim}（来源: {wiki_source or 'unknown'}）",
-        rag_claim=f"{rag_claim}（来源: {rag_source or 'unknown'}）",
-        chat_answer=chat_answer[:2000] or "（无）",
+        wiki_claim=f"{wiki_claim[:800]}（来源: {wiki_source or 'unknown'}）",
+        rag_claim=f"{rag_claim[:800]}（来源: {rag_source or 'unknown'}）",
+        chat_answer=chat_answer[:800] or "（无）",
     )
     try:
         content = await chat_complete(
@@ -54,6 +57,7 @@ async def compare_mechanism(
             [{"role": "system", "content": _PROMPT},
              {"role": "user", "content": prompt}],
             temperature=0,
+            max_tokens=2000,
         )
     except Exception:
         return None
@@ -100,8 +104,9 @@ async def extract_conclusion(content: str, config: Config) -> str | None:
     try:
         out = await chat_complete(
             config,
-            [{"role": "user", "content": _CLEANUP_PROMPT.format(content=content[:2500])}],
+            [{"role": "user", "content": _CLEANUP_PROMPT.format(content=content[:1500])}],
             temperature=0,
+            max_tokens=1500,
         )
     except Exception:
         return None
