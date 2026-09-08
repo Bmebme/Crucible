@@ -62,6 +62,12 @@ async def chat_complete(
     }
     if max_tokens:
         payload["max_tokens"] = max_tokens
+    # thinking 类模型 (deepseek 等) 思考模式默认开: 显式关掉
+    # (网关透传; 部分网关拒绝未知字段 → 开关控制, 内网实调)
+    import os as _os
+
+    if _os.environ.get("CRUCIBLE_LLM_NO_THINKING") == "on":
+        payload["thinking"] = {"type": "disabled"}
     use_rf = bool(response_format)
     if use_rf:
         payload["response_format"] = response_format
@@ -119,6 +125,11 @@ async def chat_complete(
             raise ValueError(f"网关响应无 choices: {text[:200]}")
         content = choices[0].get("message", {}).get("content", "") or ""
     content = _clean_fences(content)
+    # 网关 thinking_to_content 会把 reasoning 并成 <think> 标签 (内网实调):
+    # 成对标签整段剥除; 开头未闭合的 <think> 视为纯思考, 全部丢弃
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+    if content.startswith("<think>") and "</think>" not in content:
+        content = ""
     # 字节级清洗 (无效 UTF-8/控制字符, 网关输出可能混脏字节)
     content = content.encode("utf-8", errors="ignore").decode("utf-8")
     content = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", content)
