@@ -58,22 +58,29 @@ async def compare_mechanism(
     except Exception:
         return None
     content = content.strip()
-    # 弱模型爱输出编号列表 (内网实调: 1/2/3 罗列, 含"引言+列表"
-    # 混合形态) → 有 ≥2 行编号时剥去编号前缀, 正文行原样保留
-    # (正常正文里的偶发 "1." 不会被误伤)
     import re as _re
 
     lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+    # 滤掉思维过程的任务描述行 (模型把 "1. 理解任务/分析输入" 这类
+    # 思考步骤写进正文, 内网实调)
+    _TASK_LINE_RE = _re.compile(
+        r"^(理解任务|分析输入|分析输入内容|识别冲突|整合结论|归纳总结|提炼结论|总结要点)\s*[:：]?\s*$"
+    )
+    lines = [ln for ln in lines if not _TASK_LINE_RE.match(ln)]
+    # 弱模型爱输出编号列表 (含"引言+列表"混合形态) → 有 ≥2 行编号时
+    # 剥去编号前缀, 正文行原样保留 (正常正文里的偶发 "1." 不误伤)
     matches = [_re.match(r"^\d+[.、)）]\s*(.*)", ln) for ln in lines]
     if sum(1 for m in matches if m) >= 2:
         lines = [(m.group(1) if m else ln) for ln, m in zip(lines, matches)]
-        content = "\n".join(lines)
+    content = "\n".join(lines)
     return content or None
 
 
 _CLEANUP_PROMPT = """下面是一段知识库整合输出的原文。这段输出通常前半部分是分析过程、任务复述或编号罗列, **真正的结论放在最后面**。
 
 任务: 找到结论段的开头, 把从那里开始到结尾的内容**原样完整输出**, 包括其中的【wiki】【rag】等来源标记, 一字不差地保留。
+
+注意: 原文开头若有"理解任务""分析输入"之类的思维过程描述, 那不是结论, 不要包含在输出里。
 
 禁止: 不要改写、不要重新整理、不要摘要、不要补写任何内容、不要删改任何标记。
 
