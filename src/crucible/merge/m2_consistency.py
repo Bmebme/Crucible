@@ -24,12 +24,13 @@ _PROMPT = """你是漏洞验证知识库的合并器。下面是两个引擎对�
 ## llm-wiki chat 参考回答
 {chat_answer}
 
-请用自己的话写出一段连贯的整合回答, 直接回答该机制问题。要求:
-- 只写与问题直接相关的事实, **不照抄输入段落 (禁止整段复制输入内容)**
-- 每个论断在句末标注来源 (【wiki: 来源】或【rag】)
-- 两库说法冲突时, 依据输入原文说明采信哪一方及理由
-- 覆盖全部要点, 不编造输入之外的事实
-- 连续自然段, 禁止数字编号、禁止列表、禁止复述要求
+严格按以下模板输出 (两个标记各出现一次):
+
+【结论】在这里用自己的话写一段连贯的整合回答, 直接回答该机制问题。只写与问题直接相关的事实, 不照抄输入段落; 每个论断在句末标注来源 (【wiki: 来源】或【rag】); 两库冲突时依据输入原文说明采信哪一方及理由; 不编造输入之外的事实。
+
+【依据】在这里逐条列出支撑结论的事实要点, 每条带来源标注。
+
+注意: 【结论】之前不要输出任何内容, 不要写思考过程。
 """
 
 
@@ -66,7 +67,21 @@ async def compare_mechanism(
         )
     except Exception:
         return None
-    return normalize_summary(content) or None
+    return normalize_summary(_parse_template(content)) or None
+
+
+def _parse_template(content: str) -> str:
+    """模板锚点解析: 取【结论】标记之后的正文, 标记之前的一切
+    (思维过程/复述) 直接丢弃 —— 不依赖模型定位能力 (内网实调:
+    弱模型输出被思维过程淹没)。无标记时返回原文。"""
+    idx = content.find("【结论】")
+    if idx >= 0:
+        body = content[idx + len("【结论】"):]
+        end = body.find("【依据】")
+        if end >= 0:
+            body = body[:end]
+        return body.strip()
+    return content
 
 
 def normalize_summary(content: str) -> str:
