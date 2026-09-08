@@ -391,6 +391,19 @@ class FusionOrchestrator:
         # 弱模型友好; 失败/不可用不影响主形态 (内网实调: 严格 JSON
         # 契约导致每查必降级, 融合输出不可用)
         t2 = time.monotonic()
+        # 项目背景 (llm-wiki chat 形态: purpose/schema 注入 system,
+        # 同模型下 chat 输出正常的关键差异之一)
+        _project_context = ""
+        try:
+            _ctx_parts = []
+            for _f in ("purpose.md", "schema.md"):
+                _fp = Path(self.project_path) / _f
+                if _fp.exists():
+                    _ctx_parts.append(_fp.read_text(encoding="utf-8")[:600])
+            _project_context = "\n".join(_ctx_parts)
+        except Exception:
+            pass
+
         summary = await m2_consistency.compare_mechanism(
             # 以原文为准: 把双引擎的完整原文交给整合层 (而非片段)
             wiki_claim=(wiki_content or (f"{wiki_top.title}: {wiki_top.snippet}" if wiki_top else "")),
@@ -400,6 +413,8 @@ class FusionOrchestrator:
             config=self.config,
             chat_answer=chat_answer,
             weak=cleanup,  # 弱模型全套兜底 (模板锚点/归一化) 随前端开关
+            query=query,
+            project_context=_project_context,
         )
         resp.timings["整合"] = time.monotonic() - t2
         if summary:

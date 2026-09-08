@@ -27,6 +27,36 @@ _PROMPT_SIMPLE = """你是漏洞验证知识库的合并器。下面是两个引
 请用自己的话写出一段连贯的整合回答, 直接回答该机制问题。要求: 只写与问题直接相关的事实, 不照抄输入段落; 每个论断在句末标注来源 (【wiki: 来源】或【rag】); 两库冲突时依据原文裁决并说明理由; 覆盖全部要点; 不编造输入之外的事实; 连续自然段。
 """
 
+def _build_chat_style(
+    query: str,
+    wiki_claim: str,
+    wiki_source: str,
+    rag_claim: str,
+    chat_answer: str,
+    project_context: str,
+) -> tuple[str, str]:
+    """套用 py-llm-wiki chat 的生成形态 (内网实调: 同模型下 chat
+    输出正常, 整合输出思维过程泛滥 —— 差异在形态不在模型):
+    助手角色 + 项目背景 + 编号资料 + 极简问答指令, 无模板无禁令。
+    """
+    pages: list[str] = []
+    if wiki_claim:
+        pages.append(f"[1] {wiki_source or 'wiki'}\n{wiki_claim}")
+    if rag_claim:
+        pages.append(f"[2] lightrag 检索证据\n{rag_claim}")
+    if chat_answer:
+        pages.append(f"[3] 参考回答\n{chat_answer}")
+    system = "你是这个知识库的助手，根据提供的知识库内容回答用户的问题，答案要完整、准确，并在相应位置标注来源编号（如 [1]）。"
+    if project_context:
+        system = (
+            f"你是这个知识库的助手。项目背景:\n{project_context}\n\n"
+            "根据提供的知识库内容回答用户的问题，答案要完整、准确，"
+            "并在相应位置标注来源编号（如 [1]）。"
+        )
+    user = "## 知识库内容\n" + "\n\n".join(pages) + f"\n\n## 问题\n{query}"
+    return system, user
+
+
 _PROMPT_WEAK = _PROMPT_SIMPLE + """
 严格按以下模板输出 (两个标记各出现一次):
 
@@ -51,12 +81,15 @@ async def compare_mechanism(
     config: Config,
     chat_answer: str = "",
     weak: bool = False,
+    query: str = "",
+    project_context: str = "",
 ) -> str | None:
     """双引擎整合回答 (自由文本, 无 JSON 契约)。
 
-    weak=True (弱模型模式, 前端开关): 模板锚点 prompt + 确定性
-    解析 (标记前思维过程丢弃) + 归一化 (剥编号/滤任务行)。
-    weak=False: 简洁 prompt, 输出原样 (强模型无需兜底, 保持干净)。
+    weak=True (弱模型模式, 前端开关): 套用 py-llm-wiki chat 的
+    生成形态 (助手角色 + 项目背景 + 编号资料 + 极简问答指令),
+    输出经归一化 (剥编号/滤任务行)。
+    weak=False: 简洁 prompt, 输出原样 (强模型路径保持干净)。
     LLM 不可用/失败返回 None —— 主形态 (分离证据) 不受影响。
     """
     if not config.llm_api_key:
@@ -64,24 +97,38 @@ async def compare_mechanism(
     # 弱模型 + 超长上下文 = 预算花在思维步骤, 结论被截断 (内网实调):
     # 整合输入缩到 800×3 (全文在证据块里, 整合只需足够综合),
     # 显式 max_tokens 防止走网关默认短额度
-    tmpl = _PROMPT_WEAK if weak else _PROMPT_SIMPLE
-    prompt = tmpl.format(
-        wiki_claim=f"{wiki_claim[:800]}（来源: {wiki_source or 'unknown'}）",
-        rag_claim=f"{rag_claim[:800]}（来源: {rag_source or 'unknown'}）",
-        chat_answer=chat_answer[:800] or "（无）",
-    )
     try:
+        if weak:
+            system, user = _build_chat_style(
+                query,
+                f"{wiki_claim[:800]}（来源: {wiki_source or 'unknown'}）",
+                wiki_source or "wiki",
+                f"{rag_claim[:800]}（来源: {rag_source or 'unknown'}）",
+                chat_answer[:800],
+                project_context[:1200],
+            )
+            content = await chat_complete(
+                config,
+                [{"role": "system", "content": system},
+                 {"role": "user", "content": user}],
+                temperature=0,
+                max_tokens=2000,
+            )
+            return normalize_summary(content) or None
+        prompt = _PROMPT_SIMPLE.format(
+            wiki_claim=f"{wiki_claim[:800]}（来源: {wiki_source or 'unknown'}）",
+            rag_claim=f"{rag_claim[:800]}（来源: {rag_source or 'unknown'}）",
+            chat_answer=chat_answer[:800] or "（无）",
+        )
         content = await chat_complete(
             config,
-            [{"role": "system", "content": tmpl},
+            [{"role": "system", "content": _PROMPT_SIMPLE},
              {"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=2000,
         )
     except Exception:
         return None
-    if weak:
-        return normalize_summary(_parse_template(content)) or None
     return content.strip() or None
 
 
