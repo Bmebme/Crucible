@@ -43,31 +43,14 @@ _MERGE_MODE = {
     QueryType.EXPERIENCE: "M3",
 }
 
-_LLM_PROMPT = """将查询分为三类之一。分类依据是「答案需要什么」，不是问的主题。
+_LLM_PROMPT = """把下面的查询分为三类, 只输出一个标签 (Q1、Q2 或 Q3):
+- Q1 枚举型: 问有哪些/全部/清单/类型
+- Q2 机制型: 问怎么/如何/调用/版本/原理
+- Q3 经验型: 问以前/历史/被拦/验证过
 
-Q1 枚举型（全）：答案需要穷尽列举一组事物
-   → 问「有哪些 / 全部 / 清单 / 类型」，要的是完整性
-Q2 机制型（准）：答案需要精确描述机制事实
-   → 问「怎么 / 如何 / 调用 / 版本 / 鉴权实现」，要的是准确性
-Q3 经验型（可信）：答案需要历史实证
-   → 问「以前 / 历史 / 被拦 / 验证过 / 结果」，要的是可信度
+不要解释, 不要思考过程, 不要输出其他任何内容。
 
-判别要点：
-1. 看疑问结构，不看领域词汇
-2. 路径类问题不归 KB 查询——那是 Agent 的组合推理
-3. 混合查询 → 拆子查询，标出主类型
-4. 输出 confidence；低于 0.7 标 ambiguous
-
-示例：
-「这个产品有哪些文件处理组件？」→ Q1
-「文件名是怎么进入 convert 命令的？」→ Q2
-「上次 SSRF 验证是被什么拦的？」→ Q3
-
-只输出 JSON，格式：
-{"query_type": "Q1|Q2|Q3", "confidence": 0.9, "sub_queries": [{"type": "Q1", "text": "..."}]}
-
-# 查询
-"""
+查询:"""
 
 
 def classify_by_rules(query: str) -> IntentConfig | None:
@@ -103,24 +86,15 @@ async def classify_by_llm(query: str, config: Config) -> IntentConfig | None:
     except Exception:
         return None
 
-    try:
-        # 容错: 提取第一个 JSON 对象
-        match = re.search(r"\{.*\}", content, re.DOTALL)
-        data = json.loads(match.group(0) if match else content)
-        qtype = QueryType(data.get("query_type", "Q2"))
-        confidence = float(data.get("confidence", 0.9))
-        sub_queries = data.get("sub_queries") or []
-    except (ValueError, json.JSONDecodeError):
+    # 新版 prompt 只输出单个标签 (弱模型友好): 提取第一个 Q1/Q2/Q3
+    m = re.search(r"Q[123]", content.upper())
+    if not m:
         return None
-
-    if confidence < 0.7:
-        # 判不准就不判 (设计文档 §2.2 兜底策略)
-        return None
-
+    qtype = QueryType(m.group(0))
     return IntentConfig(
         query_type=qtype,
-        confidence=confidence,
-        sub_queries=sub_queries,
+        confidence=0.9,
+        sub_queries=[],
         channels=_CHANNELS[qtype],
     )
 
@@ -168,11 +142,9 @@ _SHORT_ELLIPSIS_RE = re.compile(r"[呢吗]\s*[?？]*$")
 _QUERY_LEN_MAX = 12  # 短问句 + 呢/吗 结尾视为省略追问
 
 _REWRITE_PROMPT = """将多轮对话中的追问改写为自包含的独立查询。
-规则:
-1. 解析指代 (这个/那个/它/其/上述) 为历史提问中的具体对象
-2. 补全省略成分 (如"接口呢" → 补出历史中的主体)
-3. 保留原问题的类型结构 (枚举/机制/经验), 不改写成另一种问法
-4. 只输出改写后的查询文本, 一行, 不要解释、不要引号
+规则: 解析指代 (这个/那个/它/其/上述) 为历史提问中的具体对象; 补全省略成分; 保留原问题的类型结构。
+
+只输出改写后的查询文本, 一行, 不要解释、不要引号、不要思考过程。
 
 # 对话历史 (用户最近几轮提问, 最早在前)
 {history}
