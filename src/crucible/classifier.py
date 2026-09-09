@@ -137,7 +137,7 @@ async def classify(query: str, config: Config) -> IntentConfig:
     ruled = classify_by_rules(query)
     if ruled is not None:
         return ruled
-    if os.environ.get("CRUCIBLE_CLASSIFY_MODE") != "rule":
+    if os.environ.get("CRUCIBLE_CLASSIFY_MODE") != "rule" and not getattr(config, "classify_rule", False):
         llm_result = await classify_by_llm(query, config)
         if llm_result is not None:
             return llm_result

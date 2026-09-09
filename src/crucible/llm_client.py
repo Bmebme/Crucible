@@ -66,7 +66,7 @@ async def chat_complete(
     # (网关透传; 部分网关拒绝未知字段 → 开关控制, 内网实调)
     import os as _os
 
-    if _os.environ.get("CRUCIBLE_LLM_NO_THINKING") == "on":
+    if _os.environ.get("CRUCIBLE_LLM_NO_THINKING") == "on" or getattr(config, "llm_no_thinking", False):
         payload["thinking"] = {"type": "disabled"}
     use_rf = bool(response_format)
     if use_rf:

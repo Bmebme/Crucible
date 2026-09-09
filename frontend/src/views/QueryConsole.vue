@@ -32,6 +32,12 @@
         <el-form-item label="结论提取(弱模型)">
           <el-switch v-model="cleanup" @change="persistCleanup" />
         </el-form-item>
+        <el-form-item label="关思考模式">
+          <el-switch v-model="noThinking" @change="persistNoThinking" />
+        </el-form-item>
+        <el-form-item label="纯规则判别">
+          <el-switch v-model="ruleOnly" @change="persistRuleOnly" />
+        </el-form-item>
       </el-form>
 
       <el-input
@@ -288,6 +294,16 @@ const cleanup = ref(localStorage.getItem('crucible-query-cleanup') === 'on')
 function persistCleanup() {
   localStorage.setItem('crucible-query-cleanup', cleanup.value ? 'on' : 'off')
 }
+// thinking 模型关思考模式 (默认开; 部署零改动原则: 全部前端开关)
+const noThinking = ref(localStorage.getItem('crucible-query-nothinking') !== 'off')
+function persistNoThinking() {
+  localStorage.setItem('crucible-query-nothinking', noThinking.value ? 'on' : 'off')
+}
+// 判别纯规则 (默认关)
+const ruleOnly = ref(localStorage.getItem('crucible-query-ruleonly') === 'on')
+function persistRuleOnly() {
+  localStorage.setItem('crucible-query-ruleonly', ruleOnly.value ? 'on' : 'off')
+}
 // 恢复的上次结果标记: 避免旧结果冒充新查询 (内网实调: 每次看到相同输出)
 const restoredAt = ref(0)
 const enumOpen = ref<string[]>([])
@@ -422,7 +438,7 @@ async function run() {
     let data: any
     if (mode.value === 'enum') data = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value, true, timeoutMin.value * 60000)
     else if (mode.value === 'experience') data = await fusionExperience(query.value.trim(), projectId.value, env.value, timeoutMin.value * 60000)
-    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value, cleanup: cleanup.value }, timeoutMin.value * 60000)
+    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value, cleanup: cleanup.value, no_thinking: noThinking.value, rule_only: ruleOnly.value }, timeoutMin.value * 60000)
     result.value = data
     notes.value = data.notes ?? []
     restoredAt.value = 0

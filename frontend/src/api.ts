@@ -12,6 +12,8 @@ export interface QueryRequest {
   env?: string
   alias_mode?: string
   cleanup?: boolean
+  no_thinking?: boolean
+  rule_only?: boolean
 }
 
 export async function fusionQuery(req: QueryRequest, timeout?: number) {

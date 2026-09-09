@@ -36,6 +36,11 @@ class Config:
     llm_model: str = field(
         default_factory=lambda: os.environ.get("CRUCIBLE_LLM_MODEL", "deepseek-chat")
     )
+    # 请求级弱模型开关 (前端可调, 部署零改动原则):
+    # llm_no_thinking: 请求带 thinking disabled + 剥 <think> 标签
+    # classify_rule: 判别纯规则, 跳过 LLM 兜底
+    llm_no_thinking: bool = False
+    classify_rule: bool = False
     # 本地嵌入模型 (LightRAG demo 级适配用)
     embed_model: str = field(
         default_factory=lambda: os.environ.get(
