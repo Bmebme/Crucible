@@ -22,6 +22,10 @@
 
 <style>
 body { margin: 0; background: #f5f7fa; font-family: -apple-system, "PingFang SC", sans-serif; }
+/* 布局锚定视口: header 固定, main 吃剩余高度并自行滚动。
+   子页面 (实体图) 用 100% 贴合, 不再依赖任何像素假设
+   (内网实调: 顶栏高度/缩放一变, 魔法数 108px 就失效出滚动条) */
+.app { height: 100vh; overflow: hidden; }
 .header {
   display: flex; align-items: center; gap: 32px;
   background: #1d2129; color: #fff; padding: 0 24px;
@@ -31,5 +35,5 @@ body { margin: 0; background: #f5f7fa; font-family: -apple-system, "PingFang SC"
 .menu { background: transparent; border-bottom: none; flex: 1; }
 .menu .el-menu-item { color: #cfd3dc; }
 .menu .el-menu-item.is-active { color: #fff; border-bottom-color: #409eff; }
-.el-main { padding: 20px 24px; }
+.el-main { padding: 20px 24px; overflow: auto; }
 </style>

@@ -19,6 +19,7 @@ import { api, listProjects } from '../api'
 const projectId = ref('')
 const projects = ref<Array<{ id: string }>>([])
 const chart = ref<HTMLElement>()
+let onResize: () => void
 
 onMounted(async () => {
   try {
@@ -60,7 +61,9 @@ async function load() {
       emphasis: { focus: 'adjacency' },
     }],
   })
-  window.addEventListener('resize', () => inst.resize())
+  window.removeEventListener('resize', onResize)
+  onResize = () => inst.resize()
+  window.addEventListener('resize', onResize)
   // 高度变化后同步画布
   await nextTick()
   inst.resize()
@@ -68,11 +71,11 @@ async function load() {
 </script>
 
 <style scoped>
-/* 恰好贴合视口不出滚动条 (内网实调: 像素求和会差一点导致下拉):
-   卡片总高 = 100vh - (60 顶栏 + 20+20 主区上下内边距 + 少量余量),
-   卡片内部 flex 自适应 (头部多高都行), 图区吃剩余全部 */
+/* 贴合视口: App.vue 已把 main 锚定在剩余高度, 这里吃满 100% 即可,
+   任意窗口大小/缩放/顶栏高度都自适应 (旧 calc(100vh-108px) 是
+   MacBook 像素假设, 内网 Chrome 上出滚动条/截断) */
 .graph-card {
-  height: calc(100vh - 108px);
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
