@@ -46,6 +46,32 @@ _CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _TREE_LINE_RE = re.compile(r"^[\s│├└┌┐┘└─|]+.*$", re.MULTILINE)
 
 
+async def _save_query_history(project_path: str, query: str, response: FusionResponse) -> None:
+    """每次查询的完整响应落盘 (内网无法复制外网, 供人肉转述/分析;
+    也为历史查询页打底)。失败不影响查询。"""
+    import json as _json
+
+    try:
+        hist_dir = Path(project_path) / "query-history"
+        hist_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        qid = abs(hash(query)) % 100000
+        fd, tmp = __import__("tempfile").mkstemp(dir=str(hist_dir), suffix=".json")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                _json.dump(
+                    {"query": query, "ts": ts, **response.to_dict()},
+                    f, ensure_ascii=False, indent=2,
+                )
+            os.replace(tmp, hist_dir / f"{ts}-{qid}.json")
+        except Exception:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+    except Exception as e:
+        logger.warning("查询历史落盘失败: %s", e)
+
+
 def _sanitize(text: str) -> str:
     """字节级清洗: 剔除无效 UTF-8 与除 \\t\\n\\r 外的控制字符。
 
@@ -141,6 +167,7 @@ class FusionOrchestrator:
         else:
             await self._run_mechanism(resolved, response, cleanup)
         response.timings["总耗时"] = time.monotonic() - t0
+        await _save_query_history(self.project_path, query, response)
 
         # 混合查询的子查询: 并行触发各自模式 (结果统一返回)
         for sub in routing.sub_queries:
@@ -451,6 +478,10 @@ class FusionOrchestrator:
                     ),
                     "provenance": ["wiki-chat"],
                 })
+        # 分析回路: 整合结论头 400 字进日志 (内网无法复制外网, 靠
+        # docker logs 转述; 弱模型输出质量排障用)
+        if summary:
+            logger.info("整合结论 head: %s", summary[:400].replace("\n", " "))
 
         # ── 主形态: 物理分离的双引擎证据 (零 LLM 依赖, 永远完整) ──
         if wiki_top:
