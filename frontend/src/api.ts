@@ -14,6 +14,7 @@ export interface QueryRequest {
   cleanup?: boolean
   no_thinking?: boolean
   rule_only?: boolean
+  budget?: number
 }
 
 export async function fusionQuery(req: QueryRequest, timeout?: number) {
@@ -33,6 +34,11 @@ export async function fusionExperience(query: string, project_id: string, env: s
 
 export async function listProjects() {
   const { data } = await api.get('/projects')
+  return data
+}
+
+export async function fetchQueryHistory(projectId: string, limit = 1) {
+  const { data } = await api.post('/fusion/query-history', { project_id: projectId, limit })
   return data
 }
 

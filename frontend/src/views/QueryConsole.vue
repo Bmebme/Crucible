@@ -97,6 +97,9 @@
           <template v-if="result.routing.confidence != null">· {{ result.routing.confidence === 0 ? '兜底' : result.routing.confidence }}</template>
         </el-tag>
         <span class="count">{{ result.results?.length ?? 0 }} 项</span>
+        <el-tag v-if="result.timed_out" size="small" type="danger">
+          等待上限降级 (未完成环节已取消)
+        </el-tag>
         <el-tag v-if="restoredAt" size="small" type="warning">
           上次结果 · {{ new Date(restoredAt).toLocaleTimeString('zh-CN', { hour12: false }) }}
         </el-tag>
@@ -249,12 +252,25 @@
   </div>
 </template>
 
+<script lang="ts">
+import { reactive } from 'vue'
+// 模块级查询状态 (组件外): SPA 内切换页面时查询继续、结果不丢
+// (内网实调: 切走再切回, 进行中的任务从界面消失)。
+// F5 刷新场景 JS 上下文销毁, 由 localStorage + 后端 query-history 落盘恢复。
+export const queryStore = reactive({
+  loading: false,
+  result: null as any,
+  notes: [] as string[],
+})
+</script>
+
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, toRefs, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { api, fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
+import { api, fetchQueryHistory, fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
+const { loading, result, notes } = toRefs(queryStore)
 
 // 大段文本 (整合结论/wiki 原文/RAG 原文) 按 markdown 渲染
 // (内网实调: 纯文本显示导致 ## ** 等标记符号满天飞)
@@ -276,9 +292,7 @@ const aliasMode = ref('l2+l3')
 const env = ref('staging')
 const query = ref('')
 const historyText = ref('')
-const loading = ref(false)
-const result = ref<any>(null)
-const notes = ref<string[]>([])
+// loading/result/notes 已提升至模块级 queryStore (见上方普通 script 块)
 const drawer = ref(false)
 const pagePath = ref('')
 const pageContent = ref('')
@@ -406,6 +420,47 @@ function restoreLastQuery() {
   } catch { return false }
 }
 
+// ── 刷新/切换恢复 (内网实调: 刷新或切走会"中断"任务) ──
+// 三层: ① 模块级 queryStore (SPA 切换不丢) ② localStorage (F5 后旧结果)
+//       ③ 后端 query-history 落盘 (F5 打断的查询跑完后覆盖回来)
+
+// 后端落盘时间戳 "%Y%m%d-%H%M%S" → 毫秒
+function parseHistTs(ts: string): number {
+  const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(ts || '')
+  if (!m) return 0
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime()
+}
+
+const HIST_WINDOW_MS = 3600_000  // 只恢复 1 小时内的落盘记录
+let histPoll: any = null
+
+function applyHistItem(item: any) {
+  query.value = item.query ?? query.value
+  result.value = item
+  notes.value = item.notes ?? []
+  restoredAt.value = parseHistTs(item.ts ?? '')
+  if (item.routing?.query_type === 'Q1') buildEnumGroups(item.results ?? [])
+  saveLastQuery()
+}
+
+// 恢复态下轮询落盘记录: F5 打断的查询后端仍在跑, 跑完落盘后覆盖显示
+function startHistPoll() {
+  let tries = 0
+  histPoll = setInterval(async () => {
+    if (!restoredAt.value) { clearInterval(histPoll); histPoll = null; return }
+    try {
+      const h = await fetchQueryHistory(projectId.value, 1)
+      const item = h?.items?.[0]
+      const histTs = parseHistTs(item?.ts ?? '')
+      if (histTs && histTs > restoredAt.value && Date.now() - histTs < HIST_WINDOW_MS) {
+        applyHistItem(item)
+        clearInterval(histPoll); histPoll = null
+      }
+    } catch { /* 历史接口不可用不打扰 */ }
+    if (++tries >= 4) { clearInterval(histPoll); histPoll = null }
+  }, 15000)
+}
+
 onMounted(async () => {
   try {
     projects.value = await listProjects()
@@ -415,7 +470,25 @@ onMounted(async () => {
   } catch (e: any) {
     ElMessage.warning('后端未连接: ' + (e?.message ?? e))
   }
-  restoreLastQuery()
+  // SPA 切换回来: store 里可能已有进行中/已完成的结果, 不动
+  if (!queryStore.result) restoreLastQuery()
+  if (restoredAt.value) {
+    // F5 刷新: 立即拉一次 (被打断的查询可能已落盘), 没有更新则轮询兜底
+    try {
+      const h = await fetchQueryHistory(projectId.value, 1)
+      const item = h?.items?.[0]
+      const histTs = parseHistTs(item?.ts ?? '')
+      if (histTs && histTs > restoredAt.value && Date.now() - histTs < HIST_WINDOW_MS) {
+        applyHistItem(item)
+      } else {
+        startHistPoll()
+      }
+    } catch { /* ignore */ }
+  }
+})
+
+onUnmounted(() => {
+  if (histPoll) { clearInterval(histPoll); histPoll = null }
 })
 
 function qtypeColor(t: string) {
@@ -438,7 +511,9 @@ async function run() {
     let data: any
     if (mode.value === 'enum') data = await fusionEnum(query.value.trim(), projectId.value, aliasMode.value, true, timeoutMin.value * 60000)
     else if (mode.value === 'experience') data = await fusionExperience(query.value.trim(), projectId.value, env.value, timeoutMin.value * 60000)
-    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value, cleanup: cleanup.value, no_thinking: noThinking.value, rule_only: ruleOnly.value }, timeoutMin.value * 60000)
+    // 后端预算与等待上限融合: 略小于 axios 超时 (留 8s 传输余量),
+    // 后端到点返回已完成部分, 前端在断连前收到 (超时也出结果)
+    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value, cleanup: cleanup.value, no_thinking: noThinking.value, rule_only: ruleOnly.value, budget: Math.max(timeoutMin.value * 60 - 8, 15) }, timeoutMin.value * 60000)
     result.value = data
     notes.value = data.notes ?? []
     restoredAt.value = 0

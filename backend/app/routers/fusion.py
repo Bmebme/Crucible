@@ -23,6 +23,7 @@ class QueryRequest(BaseModel):
     cleanup: bool = False  # 弱模型开关: 整合结论二次提取 (前端可调)
     no_thinking: bool = True   # thinking 模型关思考模式 (前端可调)
     rule_only: bool = False    # 判别纯规则, 跳过 LLM 兜底 (前端可调)
+    budget: float | None = None  # 整体等待上限 (秒, 前端等待上限开关同源; 到点返回已完成部分)
 
 
 class EnumRequest(BaseModel):
@@ -179,7 +180,10 @@ async def fusion_query(req: QueryRequest) -> dict:
     orch.config.llm_no_thinking = req.no_thinking
     orch.config.classify_rule = req.rule_only
     try:
-        resp = await orch.run(req.query, env=req.env, history=req.history or None, cleanup=req.cleanup)
+        resp = await orch.run(
+            req.query, env=req.env, history=req.history or None,
+            cleanup=req.cleanup, budget=req.budget,
+        )
     except Exception as e:  # 引擎级异常兜底, 不向外抛栈
         raise HTTPException(status_code=500, detail=f"fusion error: {e}") from e
     data = resp.to_dict()

@@ -134,6 +134,7 @@ class FusionResponse:
     conflicts: list[dict] = field(default_factory=list)  # M2 冲突对峙 (不裁决)
     notes: list[str] = field(default_factory=list)
     timings: dict[str, float] = field(default_factory=dict)  # 分段耗时 (前端直观测速)
+    timed_out: bool = False  # 等待上限触发: 未完成环节已取消, 结果为已完成子集
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -144,4 +145,5 @@ class FusionResponse:
             "conflicts": self.conflicts,
             "notes": self.notes,
             "timings": self.timings,
+            "timed_out": self.timed_out,
         }

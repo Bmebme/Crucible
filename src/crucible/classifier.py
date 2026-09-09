@@ -82,6 +82,7 @@ async def classify_by_llm(query: str, config: Config) -> IntentConfig | None:
             [{"role": "system", "content": _LLM_PROMPT},
              {"role": "user", "content": query}],
             temperature=0,
+            timeout=30.0,  # 判别 LLM 短超时: 不该拖满整体等待上限
         )
     except Exception:
         return None
@@ -175,6 +176,7 @@ async def _rewrite_by_llm(
                 config,
                 [{"role": "user", "content": _REWRITE_PROMPT.format(history=recent, query=query)}],
                 temperature=0,
+                timeout=30.0,  # 改写 LLM 短超时: 超时原样降级
             )
         ).strip()
     except Exception:

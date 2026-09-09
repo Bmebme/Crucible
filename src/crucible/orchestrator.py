@@ -24,7 +24,7 @@ from .merge.aliases import candidate_pairs, load_alias_dict, resolve_llm_pairs
 from .merge.m1_union import normalize_name, union_merge
 from .merge.m3_state import sort_by_verify_state
 from .engines.wiki_engine import find_heading
-from .schemas import Citation, FusionResponse, QueryType, WikiHit
+from .schemas import Citation, FusionResponse, IntentConfig, QueryType, WikiHit
 
 
 def _sentence_slice(text: str, max_chars: int = 800) -> str:
@@ -147,15 +147,35 @@ class FusionOrchestrator:
 
     async def run(
         self, query: str, *, env: str = "", history: list[str] | None = None,
-        cleanup: bool = False,
+        cleanup: bool = False, budget: float | None = None,
     ) -> FusionResponse:
+        """budget: 整体等待上限 (秒, 与前端「等待上限」开关同源)。
+        到点立即返回已完成部分: LLM 环节取消降级, llm-wiki/RAG 原文证据照常
+        (内网实调: 查询被 LLM 拖到前端超时, 结果全丢)。"""
         # 多轮追问: 先指代消解/省略补全 (§10.2), 所有引擎用消解后的查询。
         # history 为用户最近几轮提问 (最早在前)。
         t0 = time.monotonic()
         resolved = await rewrite_if_needed(query, history, self.config)
-        routing = await classify(resolved, self.config)
+        # 判别预算: 整体上限的 1/4, 封顶 30s; 超时走保守策略 (Q2 全通道)
+        classify_budget = min(budget * 0.25, 30.0) if budget and budget > 0 else None
+        classify_timed_out = False
+        try:
+            if classify_budget:
+                routing = await asyncio.wait_for(
+                    classify(resolved, self.config), timeout=classify_budget
+                )
+            else:
+                routing = await classify(resolved, self.config)
+        except asyncio.TimeoutError:
+            routing = IntentConfig(
+                query_type=QueryType.MECHANISM, confidence=0.0,
+                channels=["wiki", "rag"], sub_queries=[],
+            )
+            classify_timed_out = True
         response = FusionResponse(query=query, routing=routing)
         response.timings["判别"] = time.monotonic() - t0
+        if classify_timed_out:
+            response.notes.append("判别超时, 走保守策略 (Q2 全通道)")
         mode = merge_mode(routing.query_type)
         response.notes.append(f"merge_mode={mode}")
         if resolved != query:
@@ -166,7 +186,11 @@ class FusionOrchestrator:
         elif routing.query_type == QueryType.EXPERIENCE:
             await self._run_experience(resolved, response, env)
         else:
-            await self._run_mechanism(resolved, response, cleanup)
+            # 机制阶段预算 = 整体上限扣掉已消耗 (判别/改写)
+            remaining = None
+            if budget and budget > 0:
+                remaining = max(budget - (time.monotonic() - t0), 1.0)
+            await self._run_mechanism(resolved, response, cleanup, budget=remaining)
         response.timings["总耗时"] = time.monotonic() - t0
         await _save_query_history(self.project_path, query, response)
 
@@ -313,28 +337,63 @@ class FusionOrchestrator:
         ]
         resp.notes.append(f"verified_weighted={len(resp.results)}")
 
-    async def _run_mechanism(self, query: str, resp: FusionResponse, cleanup: bool = False) -> None:
-        """Q2: 双引擎召回 → M2 一致性比对 (LLM 只比对不重写) + 引用层接地。"""
-        async def timed(key: str, coro):
-            t1 = time.monotonic()
-            r = await coro
-            resp.timings[key] = resp.timings.get(key, 0.0) + (time.monotonic() - t1)
-            return r
+    async def _run_mechanism(self, query: str, resp: FusionResponse, cleanup: bool = False,
+                             budget: float | None = None) -> None:
+        """Q2: 双引擎召回 → M2 一致性比对 (LLM 只比对不重写) + 引用层接地。
+
+        budget 到点后取消未完成环节 (chat LLM 最可能被取消), 用已完成
+        结果组装返回 —— 等待上限不再转圈到死, llm-wiki 原文证据照常。"""
+        def mk(name: str, coro):
+            async def _wrap():
+                t1 = time.monotonic()
+                try:
+                    return await coro
+                finally:
+                    resp.timings[name] = time.monotonic() - t1
+            return asyncio.create_task(_wrap())
 
         async def safe_chat() -> tuple[str, list[dict]]:
             try:
                 return await self.wiki.chat_answer(self.project_id, query)
+            except asyncio.CancelledError:
+                raise  # 等待上限取消: 由上层降级
             except Exception as e:
                 logger.warning("wiki chat 参考回答获取失败: %s", e)
                 return "", []
 
-        wiki_hits, rag_answer, rag_context, chat_result = await asyncio.gather(
-            timed("wiki召回", self.wiki.search(self.project_id, query, limit=3)),
-            timed("rag召回", self.rag.query(self.project_path, query, mode="hybrid")),
-            timed("rag上下文", self.rag.query_context(self.project_path, query, mode="hybrid")),
-            timed("chat参考", safe_chat()),
-        )
-        chat_answer, chat_refs = chat_result
+        tasks = {
+            "wiki召回": mk("wiki召回", self.wiki.search(self.project_id, query, limit=3)),
+            "rag召回": mk("rag召回", self.rag.query(self.project_path, query, mode="hybrid")),
+            "rag上下文": mk("rag上下文", self.rag.query_context(self.project_path, query, mode="hybrid")),
+            "chat参考": mk("chat参考", safe_chat()),
+        }
+        if budget and budget > 0:
+            done, pending = await asyncio.wait(tasks.values(), timeout=budget)
+        else:
+            done, pending = await asyncio.wait(tasks.values())
+        if pending:
+            for t in pending:
+                t.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)  # 回收取消异常
+            resp.timed_out = True
+            resp.notes.append(
+                "等待上限触发, 已取消: "
+                + ", ".join(n for n, t in tasks.items() if t in pending)
+            )
+
+        def take(name: str, default):
+            t = tasks[name]
+            if t in done and not t.cancelled():
+                try:
+                    return t.result()
+                except Exception as e:
+                    logger.warning("%s 失败: %s", name, e)
+            return default
+
+        wiki_hits = take("wiki召回", [])
+        rag_answer = take("rag召回", "")
+        rag_context = take("rag上下文", [])
+        chat_answer, chat_refs = take("chat参考", ("", []))
         # 用户契约: chat 内部检索到的页面更详实 → 其引用页作为 wiki
         # 证据来源, 本服务搜索降为兜底 (内网实调: 自有搜索被霸榜页
         # 挤占, chat 引用页才是真正详实的)
@@ -428,7 +487,11 @@ class FusionOrchestrator:
             resp.notes.append("结论来源: chat 参考回答 (合并器已移除)")
             logger.info("整合结论 head: %s", chat_answer[:400].replace("\n", " "))
         else:
-            resp.notes.append("chat 参考不可用, 结论块空缺 (证据块照常)")
+            resp.notes.append(
+                "chat 超时降级: 结论块空缺, llm-wiki 原文证据照常 (超时也出结果)"
+                if resp.timed_out
+                else "chat 参考不可用, 结论块空缺 (证据块照常)"
+            )
 
         # ── 主形态: 物理分离的双引擎证据 (零 LLM 依赖, 永远完整) ──
         if wiki_top:
