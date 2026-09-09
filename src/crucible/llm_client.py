@@ -83,6 +83,11 @@ async def chat_complete(
     if r.status_code == 400 and use_rf:
         payload.pop("response_format", None)
         r = await c.post(url, headers=headers, json=payload, timeout=timeout)
+    # thinking 参数兼容: GLM-5.3 等强制思考模型拒绝 disabled (400)
+    # → 去掉重试, 思考走 reasoning_content 被忽略 + <think> 剥除兜底
+    if r.status_code == 400 and "thinking" in payload:
+        payload.pop("thinking", None)
+        r = await c.post(url, headers=headers, json=payload, timeout=timeout)
     r.raise_for_status()
     ct = r.headers.get("content-type", "")
     text = r.text
