@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -414,74 +415,20 @@ class FusionOrchestrator:
                 resp.notes.append("两引擎均无召回")
             return
 
-        # ── 拟合层 (可选): LLM 对照小结, 自由文本无 JSON 契约 ──
-        # 弱模型友好; 失败/不可用不影响主形态 (内网实调: 严格 JSON
-        # 契约导致每查必降级, 融合输出不可用)
-        t2 = time.monotonic()
-        # 项目背景 (llm-wiki chat 形态: purpose/schema 注入 system,
-        # 同模型下 chat 输出正常的关键差异之一)
-        _project_context = ""
-        try:
-            _ctx_parts = []
-            for _f in ("purpose.md", "schema.md"):
-                _fp = Path(self.project_path) / _f
-                if _fp.exists():
-                    _ctx_parts.append(_fp.read_text(encoding="utf-8")[:600])
-            _project_context = "\n".join(_ctx_parts)
-        except Exception:
-            pass
-
-        summary = await m2_consistency.compare_mechanism(
-            # 以原文为准: 把双引擎的完整原文交给整合层 (而非片段)
-            wiki_claim=(wiki_content or (f"{wiki_top.title}: {wiki_top.snippet}" if wiki_top else "")),
-            wiki_source=wiki_top.path if wiki_top else "",
-            rag_claim=(rag_display or rag_answer[:600]),
-            rag_source="lightrag",
-            config=self.config,
-            chat_answer=chat_answer,
-            weak=cleanup,  # 弱模型全套兜底 (模板锚点/归一化) 随前端开关
-            query=query,
-            project_context=_project_context,
-        )
-        resp.timings["整合"] = time.monotonic() - t2
-        if summary:
-            # 弱模型专用开关: 二次问答提取干净结论 (内网实调:
-            # 一次整合输出带开场白/编号/复述, 提取任务简单稳定)
-            import os as _os
-
-            if cleanup or _os.environ.get("CRUCIBLE_M2_CLEANUP") == "on":
-                t3 = time.monotonic()
-                cleaned = await m2_consistency.extract_conclusion(summary, self.config)
-                resp.timings["结论提取"] = time.monotonic() - t3
-                if cleaned:
-                    summary = cleaned
-                    resp.notes.append("M2结论提取: ok (弱模型开关)")
-                else:
-                    resp.notes.append("M2结论提取: LLM 不可用, 用原始整合输出")
+        # ── 结论块: 直接采用 chat 参考回答 (用户定调: 根因在 thinking
+        #    模型不在合并器, 整合层整体移除; chat 链已验证质量好,
+        #    双引擎证据块照旧物理分离呈现) ──
+        if chat_answer:
             resp.results.append({
                 "kind": "summary",
-                "name": "整合结论",
-                "text": summary,
-                "provenance": ["M2"],
+                "name": "整合结论 (chat)",
+                "text": _sentence_slice(m2_consistency.normalize_summary(chat_answer), 2000),
+                "provenance": ["wiki-chat"],
             })
-            resp.notes.append("M2整合: ok")
+            resp.notes.append("结论来源: chat 参考回答 (合并器已移除)")
+            logger.info("整合结论 head: %s", chat_answer[:400].replace("\n", " "))
         else:
-            # 整合失败兜底: chat 参考回答进结论块 (绝不空窗, 内网实调)
-            resp.notes.append("M2整合: LLM 不可用, 结论用 chat 参考回答")
-            if chat_answer:
-                resp.results.append({
-                    "kind": "summary",
-                    "name": "整合结论 (chat 参考)",
-                    # 兜底路径同样过弱模型归一化 (剥编号/滤思维行)
-                    "text": _sentence_slice(
-                        m2_consistency.normalize_summary(chat_answer), 2000
-                    ),
-                    "provenance": ["wiki-chat"],
-                })
-        # 分析回路: 整合结论头 400 字进日志 (内网无法复制外网, 靠
-        # docker logs 转述; 弱模型输出质量排障用)
-        if summary:
-            logger.info("整合结论 head: %s", summary[:400].replace("\n", " "))
+            resp.notes.append("chat 参考不可用, 结论块空缺 (证据块照常)")
 
         # ── 主形态: 物理分离的双引擎证据 (零 LLM 依赖, 永远完整) ──
         if wiki_top:
