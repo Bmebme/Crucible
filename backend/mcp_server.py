@@ -74,6 +74,33 @@ def _format_experience(data: dict) -> str:
 
 
 @mcp.tool()
+async def kb_query_history(project_id: str = "mae", limit: int = 5) -> str:
+    """读取项目最近的历史查询记录 (问题 + 整合结论 + 分段耗时 + notes)。
+
+    用途: 复盘分析 —— 内网 Agent 调此工具拿历史查询结果, 分析弱模型
+    输出质量/检索问题 (内网实调需求: 结果无法直接拷出, 需程序化获取)。
+    """
+    data = await _post(
+        "/fusion/query-history", {"project_id": project_id, "limit": limit}
+    )
+    lines: list[str] = []
+    for it in data.get("items", []):
+        ts = it.get("ts", "")
+        q = str(it.get("query", ""))[:80]
+        summary = ""
+        for r in it.get("results", []):
+            if r.get("kind") == "summary":
+                summary = (r.get("text") or "").replace("\n", " ")[:300]
+        timings = ", ".join(
+            f"{k}={v:.1f}s" for k, v in (it.get("timings") or {}).items()
+        )
+        lines.append(
+            f"[{ts}] Q: {q}\n  结论: {summary or '(无整合结论)'}\n  耗时: {timings or '(无)'}"
+        )
+    return "\n".join(lines) if lines else "(无历史记录)"
+
+
+@mcp.tool()
 async def kb_enum(
     hint: str,
     project_id: str = "mae",

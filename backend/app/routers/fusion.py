@@ -60,6 +60,30 @@ async def _log_query(project_id: str, query: str, qtype: str, alias_mode: str,
         pass  # 审计失败不影响查询
 
 
+class HistoryRequest(BaseModel):
+    project_id: str = "current"
+    limit: int = 5
+
+
+@router.post("/query-history")
+async def query_history(req: HistoryRequest) -> dict:
+    """读取项目最近的历史查询完整结果 (复盘/Agent 分析用, 内网实调需求)。"""
+    import json as _json
+    from pathlib import Path as _Path
+
+    proj = await _project_of(req.project_id)
+    hist_dir = _Path(proj.path) / "query-history"
+    if not hist_dir.exists():
+        return {"ok": True, "items": []}
+    items: list[dict] = []
+    for f in sorted(hist_dir.glob("*.json"), reverse=True)[: max(1, min(req.limit, 20))]:
+        try:
+            items.append(_json.loads(f.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    return {"ok": True, "items": items}
+
+
 @router.post("/classify")
 async def fusion_classify(req: QueryRequest) -> dict:
     """问题类型预判 (独立端点): 只分类不检索, 供前端实时徽章/MCP 用。"""
