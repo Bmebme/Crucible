@@ -31,6 +31,9 @@ services:
       CRUCIBLE_DATABASE_URL: postgresql+asyncpg://crucible:${PG_PASSWORD:-crucible}@postgres:5432/crucible
       # docreader 服务 (P3)
       CRUCIBLE_DOCREADER_BASE: http://docreader:8081
+      # tiktoken Linux 默认读 /tmp/data-gym-cache, 挂 ~/.cache/tiktoken 无效
+      # (内网实调); 显式指向挂载目录
+      TIKTOKEN_CACHE_DIR: /root/.cache/tiktoken
     ports:
       - "8080:8080"
     volumes:
