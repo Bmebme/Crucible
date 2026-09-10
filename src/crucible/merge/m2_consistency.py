@@ -46,12 +46,19 @@ def _build_chat_style(
         pages.append(f"[2] lightrag 检索证据\n{rag_claim}")
     if chat_answer:
         pages.append(f"[3] 参考回答\n{chat_answer}")
-    system = "你是这个知识库的助手，根据提供的知识库内容回答用户的问题，答案要完整、准确，并在相应位置标注来源编号（如 [1]）。"
+    # 整合语义 (内网实调需求): 交集取优 —— 多处资料都涉及的内容取
+    # 表述更准确的一方; 单边保留 —— 只有一处资料提到的要点也要保留,
+    # 不能只输出共识丢信息。
+    _qa_rule = (
+        "答案要完整、准确，并在相应位置标注来源编号（如 [1]）；"
+        "多处资料都涉及的内容取更准确的表述，"
+        "只有一处资料提到的要点也要保留。"
+    )
+    system = f"你是这个知识库的助手，根据提供的知识库内容回答用户的问题，{_qa_rule}"
     if project_context:
         system = (
             f"你是这个知识库的助手。项目背景:\n{project_context}\n\n"
-            "根据提供的知识库内容回答用户的问题，答案要完整、准确，"
-            "并在相应位置标注来源编号（如 [1]）。"
+            f"根据提供的知识库内容回答用户的问题，{_qa_rule}"
         )
     user = "## 知识库内容\n" + "\n\n".join(pages) + f"\n\n## 问题\n{query}"
     return system, user

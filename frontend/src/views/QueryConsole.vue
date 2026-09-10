@@ -29,9 +29,6 @@
             <el-option v-for="m in [3, 5, 10, 20, 30]" :key="m" :label="m + ' 分钟'" :value="m" />
           </el-select>
         </el-form-item>
-        <el-form-item label="结论提取(弱模型)">
-          <el-switch v-model="cleanup" @change="persistCleanup" />
-        </el-form-item>
         <el-form-item label="关思考模式">
           <el-switch v-model="noThinking" @change="persistNoThinking" />
         </el-form-item>
@@ -303,11 +300,6 @@ const timeoutMin = ref(Number(localStorage.getItem('crucible-query-timeout-min')
 function persistTimeout() {
   localStorage.setItem('crucible-query-timeout-min', String(timeoutMin.value))
 }
-// 弱模型专用: 整合结论二次提取 (前端开关, 本地持久化)
-const cleanup = ref(localStorage.getItem('crucible-query-cleanup') === 'on')
-function persistCleanup() {
-  localStorage.setItem('crucible-query-cleanup', cleanup.value ? 'on' : 'off')
-}
 // thinking 模型关思考模式 (默认开; 部署零改动原则: 全部前端开关)
 const noThinking = ref(localStorage.getItem('crucible-query-nothinking') !== 'off')
 function persistNoThinking() {
@@ -513,7 +505,7 @@ async function run() {
     else if (mode.value === 'experience') data = await fusionExperience(query.value.trim(), projectId.value, env.value, timeoutMin.value * 60000)
     // 后端预算与等待上限融合: 略小于 axios 超时 (留 8s 传输余量),
     // 后端到点返回已完成部分, 前端在断连前收到 (超时也出结果)
-    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value, cleanup: cleanup.value, no_thinking: noThinking.value, rule_only: ruleOnly.value, budget: Math.max(timeoutMin.value * 60 - 8, 15) }, timeoutMin.value * 60000)
+    else data = await fusionQuery({ query: query.value.trim(), project_id: projectId.value, history, alias_mode: aliasMode.value, no_thinking: noThinking.value, rule_only: ruleOnly.value, budget: Math.max(timeoutMin.value * 60 - 8, 15) }, timeoutMin.value * 60000)
     result.value = data
     notes.value = data.notes ?? []
     restoredAt.value = 0

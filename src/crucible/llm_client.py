@@ -131,10 +131,15 @@ async def chat_complete(
             raise ValueError(f"网关响应无 choices: {text[:200]}")
         content = choices[0].get("message", {}).get("content", "") or ""
     content = _clean_fences(content)
-    # 网关 thinking_to_content 会把 reasoning 并成 <think> 标签 (内网实调):
-    # 成对标签整段剥除; 开头未闭合的 <think> 视为纯思考, 全部丢弃
+    # 网关/服务端思考拼接 (内网实调): <think>思考</think>答案 —— 答案总在
+    # 最后一段 </think> 之后。剥除链: ① 成对标签整段剥除 (多段思考)
+    # ② 残留不成对标签时, 只留最后一个 </think> 之后的内容
+    # ③ 开头未闭合的 <think> 视为纯思考, 全部丢弃
     content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-    if content.startswith("<think>") and "</think>" not in content:
+    idx = content.rfind("</think>")
+    if idx >= 0:
+        content = content[idx + len("</think>"):].strip()
+    elif content.startswith("<think>"):
         content = ""
     # 字节级清洗 (无效 UTF-8/控制字符, 网关输出可能混脏字节)
     content = content.encode("utf-8", errors="ignore").decode("utf-8")

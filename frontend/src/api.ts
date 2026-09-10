@@ -11,7 +11,6 @@ export interface QueryRequest {
   history?: string[]
   env?: string
   alias_mode?: string
-  cleanup?: boolean
   no_thinking?: boolean
   rule_only?: boolean
   budget?: number
