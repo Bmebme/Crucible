@@ -480,7 +480,7 @@ class FusionOrchestrator:
         if chat_answer:
             resp.results.append({
                 "kind": "summary",
-                "name": "整合结论 (chat)",
+                "name": "结论 (llm-wiki chat)",
                 "text": _sentence_slice(m2_consistency.normalize_summary(chat_answer), 2000),
                 "provenance": ["wiki-chat"],
             })
