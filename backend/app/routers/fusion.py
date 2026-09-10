@@ -99,9 +99,11 @@ async def fusion_classify(req: QueryRequest) -> dict:
 
     cfg = get_settings()
     # 多轮追问先消解再分类 (与 orchestrator 同约定)
-    resolved = await _rewrite(req.query, req.history or None, _core_cfg(cfg))
+    core_cfg = _core_cfg(cfg)
+    core_cfg.classify_rule = req.rule_only  # 预判徽章与查询路由同一套判别配置
+    resolved = await _rewrite(req.query, req.history or None, core_cfg)
     ruled = _matched_rule(resolved)
-    intent = await _classify(resolved, _core_cfg(cfg))
+    intent = await _classify(resolved, core_cfg)
     return {
         "query": req.query,
         "rewritten_to": resolved if resolved != req.query else "",

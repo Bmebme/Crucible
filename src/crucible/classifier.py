@@ -25,7 +25,7 @@ from .schemas import IntentConfig, QueryType
 _RULES: list[tuple[re.Pattern, QueryType]] = [
     (re.compile(r"哪些|有哪些|类型|清单|列举|列出|全部|多少(个|种|类)?"), QueryType.ENUM),
     (re.compile(r"以前|历史|上次|最近|验证过|被拦|拦的|拦截|成功过|poc|payload", re.IGNORECASE), QueryType.EXPERIENCE),
-    (re.compile(r"怎么|如何|调用|处理|版本|鉴权|实现|区别|是什么|工作原理|结果"), QueryType.MECHANISM),
+    (re.compile(r"怎么|如何|调用|处理|版本|鉴权|实现|区别|是什么|工作原理|结果|介绍|描述|说明|阐述"), QueryType.MECHANISM),
     (re.compile(r"验证|验证记录|实测记录|误报"), QueryType.EXPERIENCE),
 ]
 
