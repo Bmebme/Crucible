@@ -184,10 +184,29 @@
             <div class="cit-title">🧩 RAG 原文</div>
             <div class="ri-md" v-html="renderMd(r.rag_excerpt)" />
           </div>
-          <!-- 结论块: llm-wiki chat 回答原样 (合并器已移除, 双引擎证据物理分离) -->
+          <!-- 最终结论: M2 整合输出 (在最上) -->
           <div v-if="r.kind === 'summary' && r.text" class="ri-source-block">
-            <div class="cit-title">🎯 结论</div>
+            <div class="cit-title">🎯 最终结论</div>
             <div class="ri-md" v-html="renderMd(r.text)" />
+          </div>
+          <!-- llm-wiki chat 完整结论 (内网实调定调: 可折叠但不能没有;
+               输出 + 引用页) -->
+          <div v-if="r.kind === 'wiki_chat' && r.text" class="ri-source-block">
+            <el-collapse v-model="openBlocks">
+              <el-collapse-item name="wikichat">
+                <template #title>
+                  <span class="cit-title">💬 llm-wiki chat 结论 · {{ r.references?.length ?? 0 }} 引用页</span>
+                </template>
+                <div class="ri-md" v-html="renderMd(r.text)" />
+                <div v-for="(ref, ri) in r.references || []" :key="ri" class="ev-item">
+                  <el-link v-if="ref.path" type="primary" class="cit-link" @click="openPage(ref.path)">
+                    {{ ref.path }}
+                  </el-link>
+                  <span v-else>{{ ref.title }}</span>
+                  <span v-if="ref.snippet" class="ev-source">— {{ ref.snippet.slice(0, 120) }}</span>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
           </div>
           <div v-if="r.citations?.length" class="ri-citations">
             <div class="cit-title">🔗 引用（{{ r.citations.length }}）</div>
@@ -312,6 +331,8 @@ function persistRuleOnly() {
 }
 // 恢复的上次结果标记: 避免旧结果冒充新查询 (内网实调: 每次看到相同输出)
 const restoredAt = ref(0)
+// llm-wiki chat 结论块折叠状态 (默认展开: 可折叠但不能没有)
+const openBlocks = ref<string[]>(['wikichat'])
 const enumOpen = ref<string[]>([])
 const enumGroups = ref<{ groups: Record<string, any[]>; wikiCount: number; ragCount: number }>({
   groups: {}, wikiCount: 0, ragCount: 0,
@@ -498,6 +519,7 @@ async function run() {
   loading.value = true
   result.value = null
   notes.value = []
+  openBlocks.value = ['wikichat']  // 新查询默认展开 wiki chat 块
   try {
     const history = historyText.value.split('\n').map((s) => s.trim()).filter(Boolean)
     let data: any

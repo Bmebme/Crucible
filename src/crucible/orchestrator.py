@@ -532,6 +532,25 @@ class FusionOrchestrator:
             })
             resp.notes.append("M2整合: ok")
             logger.info("M2 整合结论 head: %s", merged[:400].replace("\n", " "))
+            # ── llm-wiki chat 完整结论独立块 (内网实调定调: 最终结论之上
+            #    多一个 wiki 结论 —— chat 输出 + 引用页, 可折叠但不能没有) ──
+            if chat_answer:
+                resp.results.append({
+                    "kind": "wiki_chat",
+                    "name": "llm-wiki chat 结论",
+                    "text": _sentence_slice(
+                        m2_consistency.normalize_summary(chat_answer), 8000
+                    ),
+                    "provenance": ["wiki-chat"],
+                    "references": [
+                        {
+                            "title": r.get("title") or r.get("path", ""),
+                            "path": r.get("path", ""),
+                            "snippet": (r.get("snippet") or "")[:500],
+                        }
+                        for r in (chat_refs or [])
+                    ],
+                })
         elif chat_answer:
             resp.results.append({
                 "kind": "summary",
