@@ -343,6 +343,8 @@ class FusionOrchestrator:
 
         budget 到点后取消未完成环节 (chat LLM 最可能被取消), 用已完成
         结果组装返回 —— 等待上限不再转圈到死, llm-wiki 原文证据照常。"""
+        t_mech0 = time.monotonic()
+
         def mk(name: str, coro):
             async def _wrap():
                 t1 = time.monotonic()
@@ -474,23 +476,78 @@ class FusionOrchestrator:
                 resp.notes.append("两引擎均无召回")
             return
 
-        # ── 结论块: 直接采用 chat 参考回答 (用户定调: 根因在 thinking
-        #    模型不在合并器, 整合层整体移除; chat 链已验证质量好,
-        #    双引擎证据块照旧物理分离呈现) ──
-        if chat_answer:
+        # ── 结论块: M2 整合 (Q2 特点: wiki 结论 + rag 结论 LLM 合并) ──
+        # 弱模型恒走 py-llm-wiki chat 形态 (助手角色 + 编号资料 + 极简问答,
+        # 同模型下 chat 输出正常而"合并器"角色诱发 CoT 的教训);
+        # 二次提炼 prompt (extract_conclusion) 已删 —— 整合输出只过
+        # 文字层归一化。整合失败/超时 → chat 参考回答直出降级 (绝不空窗)。
+        t_int = time.monotonic()
+        project_context = ""
+        try:
+            ctx_parts = []
+            for fname in ("purpose.md", "schema.md"):
+                fp = Path(self.project_path) / fname
+                if fp.exists():
+                    ctx_parts.append(fp.read_text(encoding="utf-8")[:600])
+            project_context = "\n".join(ctx_parts)
+        except Exception:
+            pass
+        # 整合预算: 剩余等待上限 (保底 5s); 无 budget (MCP 直调) 时封顶 180s
+        integrate_budget = None
+        if budget and budget > 0:
+            integrate_budget = max(budget - (time.monotonic() - t_mech0), 5.0)
+        else:
+            integrate_budget = 180.0
+        merged = None
+        merge_fail = ""  # 降级原因 (超时/异常/无输出)
+        try:
+            merged = await asyncio.wait_for(
+                m2_consistency.compare_mechanism(
+                    wiki_claim=(wiki_content or (
+                        f"{wiki_top.title}: {wiki_top.snippet}" if wiki_top else "")),
+                    wiki_source=wiki_top.path if wiki_top else "",
+                    rag_claim=(rag_display or rag_answer[:600]),
+                    rag_source="lightrag",
+                    config=self.config,
+                    chat_answer=chat_answer,
+                    weak=True,  # 弱模型恒走 chat 形态 (chat 链已验证质量好)
+                    query=query,
+                    project_context=project_context,
+                ),
+                timeout=integrate_budget,
+            )
+        except asyncio.TimeoutError:
+            merge_fail = "等待上限内未完成"
+        except Exception as e:
+            logger.warning("M2 整合失败: %s", e)
+            merge_fail = "LLM 不可用"
+        resp.timings["整合"] = time.monotonic() - t_int
+
+        if merged:
+            resp.results.append({
+                "kind": "summary",
+                "name": "结论 (M2 整合)",
+                "text": _sentence_slice(m2_consistency.normalize_summary(merged), 2000),
+                "provenance": ["M2"],
+            })
+            resp.notes.append("M2整合: ok")
+            logger.info("M2 整合结论 head: %s", merged[:400].replace("\n", " "))
+        elif chat_answer:
             resp.results.append({
                 "kind": "summary",
                 "name": "结论 (llm-wiki chat)",
                 "text": _sentence_slice(m2_consistency.normalize_summary(chat_answer), 2000),
                 "provenance": ["wiki-chat"],
             })
-            resp.notes.append("结论来源: chat 参考回答 (合并器已移除)")
-            logger.info("整合结论 head: %s", chat_answer[:400].replace("\n", " "))
+            resp.notes.append(
+                f"M2整合: {merge_fail or '无输出'}, 结论用 chat 参考回答"
+            )
+            logger.info("chat 直出结论 head: %s", chat_answer[:400].replace("\n", " "))
         else:
             resp.notes.append(
                 "chat 超时降级: 结论块空缺, llm-wiki 原文证据照常 (超时也出结果)"
                 if resp.timed_out
-                else "chat 参考不可用, 结论块空缺 (证据块照常)"
+                else "整合与 chat 均不可用, 结论块空缺 (证据块照常)"
             )
 
         # ── 主形态: 物理分离的双引擎证据 (零 LLM 依赖, 永远完整) ──
