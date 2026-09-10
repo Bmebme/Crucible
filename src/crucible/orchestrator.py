@@ -527,7 +527,7 @@ class FusionOrchestrator:
             resp.results.append({
                 "kind": "summary",
                 "name": "结论 (M2 整合)",
-                "text": _sentence_slice(m2_consistency.normalize_summary(merged), 2000),
+                "text": _sentence_slice(m2_consistency.normalize_summary(merged), 8000),
                 "provenance": ["M2"],
             })
             resp.notes.append("M2整合: ok")
@@ -536,7 +536,7 @@ class FusionOrchestrator:
             resp.results.append({
                 "kind": "summary",
                 "name": "结论 (llm-wiki chat)",
-                "text": _sentence_slice(m2_consistency.normalize_summary(chat_answer), 2000),
+                "text": _sentence_slice(m2_consistency.normalize_summary(chat_answer), 8000),
                 "provenance": ["wiki-chat"],
             })
             resp.notes.append(

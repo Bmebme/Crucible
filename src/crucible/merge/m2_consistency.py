@@ -108,10 +108,10 @@ async def compare_mechanism(
         if weak:
             system, user = _build_chat_style(
                 query,
-                f"{wiki_claim[:800]}（来源: {wiki_source or 'unknown'}）",
+                f"{wiki_claim[:1200]}（来源: {wiki_source or 'unknown'}）",
                 wiki_source or "wiki",
-                f"{rag_claim[:800]}（来源: {rag_source or 'unknown'}）",
-                chat_answer[:800],
+                f"{rag_claim[:1200]}（来源: {rag_source or 'unknown'}）",
+                chat_answer[:1200],
                 project_context[:1200],
             )
             content = await chat_complete(
@@ -119,20 +119,20 @@ async def compare_mechanism(
                 [{"role": "system", "content": system},
                  {"role": "user", "content": user}],
                 temperature=0,
-                max_tokens=2000,
+                max_tokens=8000,  # 小额度时长答案尾部被模型硬停 (内网实调)
             )
             return normalize_summary(content) or None
         prompt = _PROMPT_SIMPLE.format(
-            wiki_claim=f"{wiki_claim[:800]}（来源: {wiki_source or 'unknown'}）",
-            rag_claim=f"{rag_claim[:800]}（来源: {rag_source or 'unknown'}）",
-            chat_answer=chat_answer[:800] or "（无）",
+            wiki_claim=f"{wiki_claim[:1200]}（来源: {wiki_source or 'unknown'}）",
+            rag_claim=f"{rag_claim[:1200]}（来源: {rag_source or 'unknown'}）",
+            chat_answer=chat_answer[:1200] or "（无）",
         )
         content = await chat_complete(
             config,
             [{"role": "system", "content": _PROMPT_SIMPLE},
              {"role": "user", "content": prompt}],
             temperature=0,
-            max_tokens=2000,
+            max_tokens=8000,
         )
     except Exception:
         return None
