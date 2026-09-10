@@ -41,6 +41,8 @@ class Config:
     # classify_rule: 判别纯规则, 跳过 LLM 兜底
     llm_no_thinking: bool = False
     classify_rule: bool = False
+    # llm_client_mode: "sdk" 时走 openai SDK 实现 (默认 "" = httpx 自建客户端)
+    llm_client_mode: str = ""
     # 本地嵌入模型 (LightRAG demo 级适配用)
     embed_model: str = field(
         default_factory=lambda: os.environ.get(
