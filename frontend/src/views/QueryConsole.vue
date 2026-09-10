@@ -578,6 +578,22 @@ async function run() {
 .ri-md :deep(ul), .ri-md :deep(ol) { margin: 4px 0; padding-left: 20px; }
 .ri-md :deep(code) { background: #f0f2f5; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 .ri-md :deep(pre) { background: #f0f2f5; padding: 8px; border-radius: 4px; overflow-x: auto; }
+/* markdown 表格: 自动布局下内容多的列抢宽度 (内网实调: 第一列超宽)。
+   fixed 布局按第一行均分列宽, 长内容在格内换行不撑爆 */
+.ri-md :deep(table) {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 6px 0;
+}
+.ri-md :deep(th), .ri-md :deep(td) {
+  border: 1px solid #dcdfe6;
+  padding: 6px 10px;
+  text-align: left;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.ri-md :deep(th) { background: #f5f7fa; font-weight: 600; }
 .ri-note { margin-top: 4px; color: #b8860b; font-size: 12px; }
 .ri-path { margin-top: 4px; color: #909399; font-size: 12px; }
 .ri-citations { margin-top: 8px; background: #f8fafc; border-radius: 6px; padding: 8px 10px; }
