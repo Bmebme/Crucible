@@ -108,10 +108,10 @@ async def compare_mechanism(
         if weak:
             system, user = _build_chat_style(
                 query,
-                f"{wiki_claim[:1200]}（来源: {wiki_source or 'unknown'}）",
+                f"{wiki_claim[:3000]}（来源: {wiki_source or 'unknown'}）",
                 wiki_source or "wiki",
-                f"{rag_claim[:1200]}（来源: {rag_source or 'unknown'}）",
-                chat_answer[:1200],
+                f"{rag_claim[:3000]}（来源: {rag_source or 'unknown'}）",
+                chat_answer[:3000],
                 project_context[:1200],
             )
             content = await chat_complete(
@@ -123,9 +123,9 @@ async def compare_mechanism(
             )
             return normalize_summary(content) or None
         prompt = _PROMPT_SIMPLE.format(
-            wiki_claim=f"{wiki_claim[:1200]}（来源: {wiki_source or 'unknown'}）",
-            rag_claim=f"{rag_claim[:1200]}（来源: {rag_source or 'unknown'}）",
-            chat_answer=chat_answer[:1200] or "（无）",
+            wiki_claim=f"{wiki_claim[:3000]}（来源: {wiki_source or 'unknown'}）",
+            rag_claim=f"{rag_claim[:3000]}（来源: {rag_source or 'unknown'}）",
+            chat_answer=chat_answer[:3000] or "（无）",
         )
         content = await chat_complete(
             config,
