@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from ..db import session_scope
 from ..models import QueryLog
 from ..services.engines import get_orchestrator
+from .projects import _wiki_project_exists
 
 router = APIRouter(prefix="/fusion", tags=["fusion"])
 
@@ -46,6 +47,44 @@ async def _project_of(project_id: str):
     from ..repos import get_project
 
     return await get_project(project_id)
+
+
+async def _align_wiki_project(proj) -> str:
+    """wiki_project_id 空/失效时按路径 basename 自动对齐 llm-wiki 真实
+    项目 id (内网实调: 表里存错 id → chat/搜索 404, 兜底误用项目 id)。
+    对齐成功回写 projects 表; 失败返回 "" (wiki 侧调用降级)。"""
+    import httpx
+    from pathlib import Path as _Path
+
+    from sqlalchemy import update as _update
+
+    from ..config import get_settings
+    from ..db import session_scope
+    from ..models import Project
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, trust_env=False) as c:
+            r = await c.get(f"{get_settings().wiki_base}/api/v1/projects")
+        if r.status_code != 200:
+            return ""
+        data = r.json()
+        projects = (data.get("data") or {}).get("projects") or data.get("projects") or []
+    except Exception:
+        return ""
+    want = _Path(proj.path).name
+    for p in projects:
+        pid = str(p.get("id", ""))
+        if pid and _Path(str(p.get("path", ""))).name == want:
+            try:
+                async with session_scope() as s:
+                    await s.execute(
+                        _update(Project).where(Project.id == proj.id)
+                        .values(wiki_project_id=pid)
+                    )
+            except Exception:
+                pass
+            return pid
+    return ""
 
 
 async def _log_query(project_id: str, query: str, qtype: str, alias_mode: str,
@@ -172,9 +211,16 @@ async def fusion_query(req: QueryRequest) -> dict:
     t0 = time.monotonic()
     proj = await _project_of(req.project_id)
     project_path = proj.path
+    # wiki_project_id 空/失效时按路径自动对齐 (内网实调: 存错 id →
+    # chat/搜索 404; 对齐失败则 wiki 侧调用自行降级)
+    wiki_project_id = proj.wiki_project_id
+    if not wiki_project_id:
+        wiki_project_id = await _align_wiki_project(proj)
+    elif not await _wiki_project_exists(wiki_project_id):
+        wiki_project_id = await _align_wiki_project(proj)
     orch = await get_orchestrator(
         req.project_id, project_path,
-        wiki_project_id=proj.wiki_project_id,
+        wiki_project_id=wiki_project_id,
         rag_workdir=proj.rag_workdir,
     )
     if req.alias_mode:
@@ -213,9 +259,16 @@ async def fusion_enum(req: EnumRequest) -> dict:
     t0 = time.monotonic()
     proj = await _project_of(req.project_id)
     project_path = proj.path
+    # wiki_project_id 空/失效时按路径自动对齐 (内网实调: 存错 id →
+    # chat/搜索 404; 对齐失败则 wiki 侧调用自行降级)
+    wiki_project_id = proj.wiki_project_id
+    if not wiki_project_id:
+        wiki_project_id = await _align_wiki_project(proj)
+    elif not await _wiki_project_exists(wiki_project_id):
+        wiki_project_id = await _align_wiki_project(proj)
     orch = await get_orchestrator(
         req.project_id, project_path,
-        wiki_project_id=proj.wiki_project_id,
+        wiki_project_id=wiki_project_id,
         rag_workdir=proj.rag_workdir,
     )
     if req.alias_mode:
@@ -262,9 +315,16 @@ async def fusion_experience(req: ExperienceRequest) -> dict:
     t0 = time.monotonic()
     proj = await _project_of(req.project_id)
     project_path = proj.path
+    # wiki_project_id 空/失效时按路径自动对齐 (内网实调: 存错 id →
+    # chat/搜索 404; 对齐失败则 wiki 侧调用自行降级)
+    wiki_project_id = proj.wiki_project_id
+    if not wiki_project_id:
+        wiki_project_id = await _align_wiki_project(proj)
+    elif not await _wiki_project_exists(wiki_project_id):
+        wiki_project_id = await _align_wiki_project(proj)
     orch = await get_orchestrator(
         req.project_id, project_path,
-        wiki_project_id=proj.wiki_project_id,
+        wiki_project_id=wiki_project_id,
         rag_workdir=proj.rag_workdir,
     )
     try:
