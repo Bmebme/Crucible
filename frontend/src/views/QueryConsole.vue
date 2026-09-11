@@ -345,8 +345,10 @@ const timeoutMin = ref(Number(localStorage.getItem('crucible-query-timeout-min')
 function persistTimeout() {
   localStorage.setItem('crucible-query-timeout-min', String(timeoutMin.value))
 }
-// thinking 模型关思考模式 (默认开; 部署零改动原则: 全部前端开关)
-const noThinking = ref(localStorage.getItem('crucible-query-nothinking') !== 'off')
+// thinking 模型关思考模式 (默认关: 内网实调发现网关对带 thinking
+// 参数的请求反而触发思考拼接, 不发参数才干净; 官方 API 等支持
+// disabled 的环境显式打开)
+const noThinking = ref(localStorage.getItem('crucible-query-nothinking') === 'on')
 function persistNoThinking() {
   localStorage.setItem('crucible-query-nothinking', noThinking.value ? 'on' : 'off')
 }

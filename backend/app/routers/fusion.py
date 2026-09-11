@@ -22,7 +22,10 @@ class QueryRequest(BaseModel):
     alias_mode: str | None = None
     include_related: bool = False  # 软隔离: 关联产品低权重参考区
     cleanup: bool = False  # 弱模型开关: 整合结论二次提取 (前端可调)
-    no_thinking: bool = True   # thinking 模型关思考模式 (前端可调)
+    no_thinking: bool = False  # thinking 模型关思考模式 (前端可调)。
+                               # 默认关: 内网实调发现网关对带 thinking 参数的
+                               # 请求反而触发思考拼接 (disabled 被特殊路径处理),
+                               # 不发参数才干净 —— 默认不干预, 需要时显式开
     rule_only: bool = False    # 判别纯规则, 跳过 LLM 兜底 (前端可调)
     budget: float | None = None  # 整体等待上限 (秒, 前端等待上限开关同源; 到点返回已完成部分)
 
