@@ -44,6 +44,16 @@ def get_wiki() -> WikiEngine:
     return _wiki_by_base[s.wiki_base]
 
 
+def clear_rag(project_path: str, rag_workdir: str = "") -> str:
+    """移除 rag 引擎实例缓存 (索引清理后调用, 下次查询惰性重建)。
+
+    返回对应的 workdir 路径; 无缓存时同样返回 (供调用方清理目录)。
+    """
+    wd = workdir_for(project_path, rag_workdir)
+    _rag_by_workdir.pop(wd, None)
+    return wd
+
+
 def workdir_for(project_path: str, rag_workdir: str = "") -> str:
     s = get_settings()
     if rag_workdir:

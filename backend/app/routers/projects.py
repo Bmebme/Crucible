@@ -39,6 +39,34 @@ async def delete_project(project_id: str) -> dict:
     return {"ok": True, "deleted": project_id}
 
 
+@router.post("/{project_id}/rag/clear")
+async def clear_rag_index(project_id: str) -> dict:
+    """清理 LightRAG 索引缓存 (旧模型/旧代码时代生成的实体与向量
+    质量差 → 清理后重新摄入)。workdir 改名备份 (可回滚), 引擎
+    进程内缓存同步移除, 下次查询惰性重建空库。
+
+    清理后重新生成: python scripts/batch_reingest.py <project_id>
+    """
+    import os
+    import time
+
+    from ..services.engines import clear_rag
+
+    async with session_scope() as s:
+        row = await s.get(Project, project_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"项目 {project_id} 未注册")
+        wd = clear_rag(row.path, row.rag_workdir)
+    if not os.path.isdir(wd):
+        return {"ok": True, "project_id": project_id, "workdir": wd,
+                "note": "索引目录不存在 (无需清理), 引擎缓存已清"}
+    bak = f"{wd}.bak-{int(time.time())}"
+    os.rename(wd, bak)
+    return {"ok": True, "project_id": project_id,
+            "workdir": wd, "backup": bak,
+            "note": "索引已备份并移除, 重新摄入: python scripts/batch_reingest.py " + project_id}
+
+
 @router.get("")
 async def projects() -> list[dict]:
     rows = await list_projects()
