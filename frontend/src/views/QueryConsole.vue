@@ -292,7 +292,12 @@ const { loading, result, notes } = toRefs(queryStore)
 // (内网实调: 纯文本显示导致 ## ** 等标记符号满天飞)
 function renderMd(text: string): string {
   try {
-    return DOMPurify.sanitize(marked.parse(text || '') as string)
+    // 弱模型输出的星号加粗常带空格 (** xxx** / **xxx **), marked
+    // 不解析 → 先规整成标准形态 (内网实调: 结论开头 ** 字面显示)
+    const normalized = (text || '')
+      .replace(/\*\*\s+([^*\n]+?)\*\*/g, '**$1**')   // 左空格
+      .replace(/\*\*([^*\n]+?)\s+\*\*/g, '**$1**')   // 右空格
+    return DOMPurify.sanitize(marked.parse(normalized) as string)
   } catch {
     // 渲染失败降级为原文 (绝不能返回空导致内容块空白, 内网实调)
     const el = document.createElement('div')
