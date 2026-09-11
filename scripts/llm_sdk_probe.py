@@ -57,6 +57,34 @@ async def probe(client, label, question, stream, extra_body=None):
         print(f"\n[{label}] 异常 ({time.monotonic() - t0:.1f}s): {type(e).__name__}: {e}")
 
 
+async def probe_raw(base, key, model, question):
+    """原始探测: httpx 直连流式请求, 打印响应头与原始帧字节 (不经 SDK)。
+
+    SDK 探针 content=0 时用这组看服务到底发了什么 (字段结构/分隔符)。"""
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {key or 'EMPTY'}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=60.0, trust_env=False) as c:
+        async with c.stream(
+            "POST", f"{base.rstrip('/')}/chat/completions", headers=headers,
+            json={
+                "model": model, "stream": True,
+                "messages": [{"role": "user", "content": question}],
+            },
+        ) as r:
+            print(f"\n[⑤ 原始流式] status={r.status_code} "
+                  f"content-type={r.headers.get('content-type')}")
+            n = 0
+            async for line in r.aiter_lines():
+                print(f"  RAW> {line!r}")
+                n += 1
+                if n >= 12:
+                    break
+
+
 async def main():
     if len(sys.argv) < 4:
         print(__doc__)
@@ -77,6 +105,7 @@ async def main():
         client, "④ 流式   thinking=disabled", question,
         stream=True, extra_body={"thinking": {"type": "disabled"}},
     )
+    await probe_raw(base, key, model, question)
 
 
 if __name__ == "__main__":
