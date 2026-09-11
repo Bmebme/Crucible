@@ -288,15 +288,36 @@ import DOMPurify from 'dompurify'
 import { api, fetchQueryHistory, fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
 const { loading, result, notes } = toRefs(queryStore)
 
+// 星号加粗空格形态规整: 逐对匹配 (见 renderMd 内注释)
+function normalizeBold(text: string): string {
+  let out = ''
+  let rest = text
+  for (;;) {
+    const i = rest.indexOf('**')
+    if (i < 0) { out += rest; break }
+    const j = rest.indexOf('**', i + 2)
+    if (j < 0) { out += rest; break }
+    const inner = rest.slice(i + 2, j).trim()
+    if (!inner || inner.includes('*') || inner.includes('\n')) {
+      out += rest.slice(0, i + 2)
+      rest = rest.slice(i + 2)
+      continue
+    }
+    out += rest.slice(0, i) + '**' + inner + '**'
+    rest = rest.slice(j + 2)
+  }
+  return out
+}
+
 // 大段文本 (整合结论/wiki 原文/RAG 原文) 按 markdown 渲染
 // (内网实调: 纯文本显示导致 ## ** 等标记符号满天飞)
 function renderMd(text: string): string {
   try {
-    // 弱模型输出的星号加粗常带空格 (** xxx** / **xxx **), marked
-    // 不解析 → 先规整成标准形态 (内网实调: 结论开头 ** 字面显示)
-    const normalized = (text || '')
-      .replace(/\*\*\s+([^*\n]+?)\*\*/g, '**$1**')   // 左空格
-      .replace(/\*\*([^*\n]+?)\s+\*\*/g, '**$1**')   // 右空格
+    // 弱模型输出的星号加粗常带空格 (** xxx** / **xxx ** / ** xxx **),
+    // marked 不解析 → 先规整成标准形态 (内网实调: 结论开头 ** 字面
+    // 显示)。逐对匹配 (正则跨对误伤): 找到 ** 与最近的 ** 配对,
+    // 内容 trim 后不含星号/换行即规整; 奇数星号保留原样。
+    const normalized = normalizeBold(text || '')
     return DOMPurify.sanitize(marked.parse(normalized) as string)
   } catch {
     // 渲染失败降级为原文 (绝不能返回空导致内容块空白, 内网实调)
