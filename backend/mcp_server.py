@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 
@@ -41,6 +42,26 @@ async def _post(path: str, body: dict[str, Any]) -> dict:
         return resp.json()
 
 
+# 查询类工具默认等待上限 (秒): 与平台查询台"等待上限"同语义
+DEFAULT_TIMEOUT = 300.0
+
+
+async def _post_bounded(path: str, body: dict[str, Any], timeout: float) -> dict:
+    """带硬超时的 POST —— 后端预算之外的最后防线: 后端未按预算返回时
+    放弃等待, 返回结构化超时错误给 Agent, 而不是无限挂起。
+    timeout<=0 视为不限 (仅受 httpx 自身超时约束)。"""
+    if timeout <= 0:
+        return await _post(path, body)
+    try:
+        return await asyncio.wait_for(_post(path, body), timeout=timeout)
+    except asyncio.TimeoutError:
+        return {
+            "ok": False,
+            "error": f"timeout after {timeout:.0f}s (可调大 timeout 参数; "
+                     "kb_query 超时会返回已完成部分而非报错)",
+        }
+
+
 async def _upload_verification(
     project_id: str, title: str, verify_state: str, env: str, content: str
 ) -> dict:
@@ -66,6 +87,7 @@ async def kb_query(
     project_id: str,
     history: list[str] | None = None,
     env: str = "",
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> dict:
     """【首选工具】通用融合查询 —— 最高优先级入口, 与平台查询台同一链路 (自动判别类型)。
 
@@ -75,16 +97,23 @@ async def kb_query(
 
     任何「了解某组件/机制/历史」的问题都可直接用; 追问可传 history
     (指代消解)。结果带文段级引用 (citations), 决策前必读引用原文。
+
+    timeout: 等待上限秒数 (默认 300 = 5 分钟)。到点后端返回**已完成部分**
+    (timed_out=true, 结论可能缺席但原文证据照常), 不会报错。
     """
-    return await _post(
+    return await _post_bounded(
         "/fusion/query",
         {"query": query, "project_id": project_id,
-         "history": history or [], "env": env},
+         "history": history or [], "env": env, "budget": timeout},
+        timeout + 20.0,  # 后端到点返回; 余量防传输抖动
     )
 
 
 @mcp.tool()
-async def kb_enum(hint: str, project_id: str, related: bool = False) -> dict:
+async def kb_enum(
+    hint: str, project_id: str, related: bool = False,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> dict:
     """枚举组件/接口/服务/概念清单 (定向快捷 —— 优先用 kb_query)。
 
     仅当明确只需要「攻击面清单」时使用; 若还需机制说明或结论, 直接用
@@ -93,16 +122,20 @@ async def kb_enum(hint: str, project_id: str, related: bool = False) -> dict:
     低权重参考区。
 
     返回 JSON: results (并集清单, 含简介/实体类型) / differences (两库
-    差异 = 知识缺口信号) / notes。
+    差异 = 知识缺口信号) / notes。timeout: 等待上限秒数 (默认 300)。
     """
-    return await _post(
+    return await _post_bounded(
         "/fusion/enum",
         {"hint": hint, "project_id": project_id, "include_related": related},
+        timeout,
     )
 
 
 @mcp.tool()
-async def kb_experience(query: str, project_id: str, env: str = "staging") -> dict:
+async def kb_experience(
+    query: str, project_id: str, env: str = "staging",
+    timeout: float = DEFAULT_TIMEOUT,
+) -> dict:
     """查询历史验证记录/拦截特征/误报记录 (定向快捷 —— 优先用 kb_query)。
 
     仅当明确只要「按验证状态加权的记录清单」时使用。用途: POC 生成与
@@ -110,10 +143,12 @@ async def kb_experience(query: str, project_id: str, env: str = "staging") -> di
 
     返回 JSON: results 按 verify_state 加权降序 (成功 1.0 > 未验证 0.5 >
     拦截负知识 0.2); blocked 记录仅在 env 匹配时返回 (env 传当前验证环境)。
+    timeout: 等待上限秒数 (默认 300)。
     """
-    return await _post(
+    return await _post_bounded(
         "/fusion/experience",
         {"query": query, "project_id": project_id, "env": env},
+        timeout,
     )
 
 
