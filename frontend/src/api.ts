@@ -41,6 +41,11 @@ export async function fetchQueryHistory(projectId: string, limit = 1) {
   return data
 }
 
+export async function clearQueryHistory(projectId: string) {
+  const { data } = await api.post('/fusion/query-history/clear', { project_id: projectId })
+  return data
+}
+
 export async function registerProject(p: Record<string, string>) {
   const { data } = await api.post('/projects', p)
   return data

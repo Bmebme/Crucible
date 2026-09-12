@@ -127,6 +127,25 @@ async def query_history(req: HistoryRequest) -> dict:
     return {"ok": True, "items": items}
 
 
+@router.post("/query-history/clear")
+async def clear_query_history(req: HistoryRequest) -> dict:
+    """清空项目查询历史 (旧代码时代结论质量差, 清掉避免恢复/复盘被
+    旧数据干扰)。目录整体改名备份 (可回滚)。"""
+    import os
+    import time as _time
+    from pathlib import Path as _Path
+
+    proj = await _project_of(req.project_id)
+    hist_dir = _Path(proj.path) / "query-history"
+    if not hist_dir.exists():
+        return {"ok": True, "cleared": 0, "note": "无历史目录"}
+    n = len(list(hist_dir.glob("*.json")))
+    bak = hist_dir.with_name(f"query-history.bak-{int(_time.time())}")
+    os.rename(hist_dir, bak)
+    return {"ok": True, "cleared": n, "backup": str(bak),
+            "note": "历史已备份并清空 (回滚: 目录改回 query-history)"}
+
+
 @router.post("/classify")
 async def fusion_classify(req: QueryRequest) -> dict:
     """问题类型预判 (独立端点): 只分类不检索, 供前端实时徽章/MCP 用。"""

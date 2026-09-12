@@ -100,6 +100,10 @@
         <el-tag v-if="restoredAt" size="small" type="warning">
           上次结果 · {{ new Date(restoredAt).toLocaleTimeString('zh-CN', { hour12: false }) }}
         </el-tag>
+        <el-button
+          size="small" text type="danger" class="clear-hist"
+          @click="clearHistory"
+        >清空查询历史</el-button>
       </template>
 
       <!-- 分段耗时 (内网实调需求: 直观看到钱花在哪) -->
@@ -282,10 +286,10 @@ export const queryStore = reactive({
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, toRefs, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { api, fetchQueryHistory, fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
+import { api, clearQueryHistory, fetchQueryHistory, fusionEnum, fusionExperience, fusionQuery, listProjects } from '../api'
 const { loading, result, notes } = toRefs(queryStore)
 
 // 星号加粗空格形态规整: 逐对匹配 (见 renderMd 内注释)
@@ -426,6 +430,22 @@ async function openPage(path: string) {
 }
 
 const placeholder = ref('例如: MAE 有哪些外部接口？')
+
+// 清空查询历史 (旧代码时代结论质量差, 清掉避免恢复/复盘被旧数据干扰)
+async function clearHistory() {
+  try {
+    await ElMessageBox.confirm(
+      '清空该项目的查询历史落盘记录 (备份可回滚)。旧结论不再出现在恢复/复盘里。继续？',
+      '清空查询历史', { type: 'warning' },
+    )
+  } catch { return }
+  try {
+    const r = await clearQueryHistory(projectId.value)
+    ElMessage.success(`已清空 ${r.cleared ?? 0} 条 (备份: ${r.backup ?? '无'})`)
+  } catch (e: any) {
+    ElMessage.error('清空失败: ' + (e?.response?.data?.detail ?? e?.message ?? e))
+  }
+}
 
 // 上次问答持久化: 切走/刷新不丢结果 (内网实调 bug)
 const LAST_QUERY_KEY = 'crucible-last-query'
@@ -590,6 +610,7 @@ async function run() {
 .timings { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .qtype { margin-left: 8px; }
 .count { float: right; color: #909399; font-size: 13px; }
+.clear-hist { float: right; margin-left: 8px; }
 .result-item { padding: 10px 0; border-bottom: 1px dashed #e4e7ed; }
 .ri-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ri-name { font-weight: 600; margin-right: 4px; }
