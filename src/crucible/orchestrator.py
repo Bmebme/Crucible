@@ -523,12 +523,33 @@ class FusionOrchestrator:
             merge_fail = "LLM 不可用"
         resp.timings["整合"] = time.monotonic() - t_int
 
+        # 结论出处: 与整合 prompt 的编号材料一一对应 ([1] wiki 原文 /
+        # [2] lightrag / [3] chat 参考) —— 正文角标可对回原文, 结论不再
+        # 是无出处的孤立文章 (内网实调: 角标 [1][2][3] 无处可查)
+        concl_citations: list[dict] = []
+        if wiki_top and wiki_top.path:
+            concl_citations.append({
+                "ref_no": 1, "source": "wiki", "path": wiki_top.path,
+                "excerpt": _sentence_slice(
+                    _strip_frontmatter(wiki_raw.get(wiki_top.path, "")), 300),
+            })
+        for c in rag_citations[:3]:
+            concl_citations.append({**c.to_dict(), "ref_no": 2})
+        for ref in (chat_refs or [])[:5]:
+            if ref.get("path"):
+                concl_citations.append({
+                    "ref_no": 3, "source": "wiki-chat", "path": ref["path"],
+                    "excerpt": _sentence_slice(
+                        _strip_frontmatter(ref.get("snippet") or ""), 300),
+                })
+
         if merged:
             resp.results.append({
                 "kind": "summary",
                 "name": "结论 (M2 整合)",
                 "text": _sentence_slice(m2_consistency.normalize_summary(merged), 8000),
                 "provenance": ["M2"],
+                "citations": concl_citations,
             })
             resp.notes.append("M2整合: ok")
             logger.info("M2 整合结论 head: %s", merged[:400].replace("\n", " "))
@@ -557,6 +578,7 @@ class FusionOrchestrator:
                 "name": "结论 (llm-wiki chat)",
                 "text": _sentence_slice(m2_consistency.normalize_summary(chat_answer), 8000),
                 "provenance": ["wiki-chat"],
+                "citations": concl_citations,
             })
             resp.notes.append(
                 f"M2整合: {merge_fail or '无输出'}, 结论用 chat 参考回答"

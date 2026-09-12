@@ -216,8 +216,10 @@
           <div v-if="r.citations?.length" class="ri-citations">
             <div class="cit-title">🔗 引用（{{ r.citations.length }}）</div>
             <div v-for="(c, ci) in r.citations" :key="ci" class="cit-item">
-              <el-tag size="small" :type="c.source === 'wiki' ? 'primary' : 'success'">{{ c.source }}</el-tag>
-              <template v-if="c.source === 'wiki' && c.path">
+              <!-- 结论出处角标 [N]: 与结论正文的编号材料一一对应 -->
+              <el-tag v-if="c.ref_no" size="small" type="info" class="cit-no">[{{ c.ref_no }}]</el-tag>
+              <el-tag size="small" :type="c.source === 'wiki' || c.source === 'wiki-chat' ? 'primary' : 'success'">{{ c.source }}</el-tag>
+              <template v-if="c.path && (c.source === 'wiki' || c.source === 'wiki-chat')">
                 <el-link type="primary" class="cit-link" @click="openPage(c.path)">{{ c.path }}</el-link>
               </template>
               <span v-else-if="c.heading_path" class="cit-heading">{{ c.heading_path }}</span>
@@ -696,6 +698,7 @@ async function run() {
 .ri-path { margin-top: 4px; color: #909399; font-size: 12px; }
 .ri-citations { margin-top: 8px; background: #f8fafc; border-radius: 6px; padding: 8px 10px; }
 .cit-title { font-size: 12px; color: #606266; margin-bottom: 6px; }
+.cit-no { margin-right: 4px; }
 .cit-item { margin-bottom: 6px; font-size: 12px; }
 .cit-link { font-size: 12px; margin-left: 4px; }
 .cit-heading { color: #606266; margin-left: 4px; }
