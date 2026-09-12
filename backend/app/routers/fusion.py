@@ -127,6 +127,36 @@ async def query_history(req: HistoryRequest) -> dict:
     return {"ok": True, "items": items}
 
 
+@router.get("/mcp-calls")
+async def mcp_calls(limit: int = 50) -> dict:
+    """MCP 调用监控数据: JSONL 日志尾部 N 条 (新在前)。
+
+    日志由 MCP 服务端 (_log_call) 每次工具调用追加一行; 前端"MCP 监控"
+    页展示耗时/状态/超时/结果摘要。路径与 mcp_server.MCP_LOG 同约定。
+    """
+    import json as _json
+    import os as _os
+    from pathlib import Path as _Path
+
+    path = _Path(_os.environ.get("CRUCIBLE_MCP_LOG", "/data/_mcp-calls.jsonl"))
+    if not path.exists():
+        path = _Path("/tmp/crucible-mcp-calls.jsonl")
+    if not path.exists():
+        return {"ok": True, "items": []}
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return {"ok": True, "items": []}
+    items: list[dict] = []
+    for ln in lines[-max(1, min(limit, 500)):]:
+        try:
+            items.append(_json.loads(ln))
+        except Exception:
+            continue
+    items.reverse()  # 新在前
+    return {"ok": True, "items": items}
+
+
 @router.post("/query-history/clear")
 async def clear_query_history(req: HistoryRequest) -> dict:
     """清空项目查询历史 (旧代码时代结论质量差, 清掉避免恢复/复盘被

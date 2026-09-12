@@ -8,6 +8,7 @@ export const router = createRouter({
     { path: '/ledger', name: 'ledger', component: () => import('./views/LedgerView.vue'), meta: { title: '知识台账' } },
     { path: '/aliases', name: 'aliases', component: () => import('./views/AliasReviewView.vue'), meta: { title: '对齐管理' } },
     { path: '/graph', name: 'graph', component: () => import('./views/GraphView.vue'), meta: { title: '实体图' } },
+    { path: '/mcp-monitor', name: 'mcp-monitor', component: () => import('./views/McpMonitor.vue'), meta: { title: 'MCP 监控' } },
     { path: '/projects', name: 'projects', component: () => import('./views/ProjectsView.vue'), meta: { title: '项目中心' } },
   ],
 })

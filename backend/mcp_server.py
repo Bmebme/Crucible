@@ -49,6 +49,52 @@ async def _post(path: str, body: dict[str, Any]) -> dict:
 # 查询类工具默认等待上限 (秒): 与平台查询台"等待上限"同语义
 DEFAULT_TIMEOUT = 300.0
 
+# MCP 调用日志 (JSONL, 前端"MCP 监控"页读): /data 不可写时退 /tmp
+MCP_LOG = os.environ.get("CRUCIBLE_MCP_LOG", "/data/_mcp-calls.jsonl")
+
+
+def _log_call(tool: str, project_id: str, t_start: float, status: str,
+              timeout: float = 0.0, brief: dict | None = None) -> None:
+    """每次工具调用落一行 JSONL (失败不影响调用本身)。"""
+    import json as _json
+    import time as _time
+
+    rec = {
+        "ts": _time.strftime("%Y-%m-%d %H:%M:%S"),
+        "tool": tool,
+        "project_id": project_id,
+        "duration_ms": int((_time.monotonic() - t_start) * 1000),
+        "status": status,        # ok | timeout | error
+        "timeout": timeout,
+        "brief": brief or {},
+    }
+    line = _json.dumps(rec, ensure_ascii=False) + "\n"
+    for path in (MCP_LOG, "/tmp/crucible-mcp-calls.jsonl"):
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line)
+            return
+        except OSError:
+            continue
+        except Exception:
+            return
+
+
+def _brief_of(data: dict) -> dict:
+    """结果摘要: 超时标记 / 块数 / 分段耗时 / 错误。"""
+    brief: dict[str, Any] = {}
+    if not isinstance(data, dict):
+        return brief
+    if data.get("timed_out") is not None:
+        brief["timed_out"] = data.get("timed_out")
+    if isinstance(data.get("results"), list):
+        brief["results"] = len(data["results"])
+    if isinstance(data.get("timings"), dict):
+        brief["timings"] = {k: round(v, 1) for k, v in data["timings"].items()}
+    if data.get("error"):
+        brief["error"] = str(data["error"])[:200]
+    return brief
+
 
 async def _post_bounded(path: str, body: dict[str, Any], timeout: float) -> dict:
     """带硬超时的 POST —— 后端预算之外的最后防线: 后端未按预算返回时
@@ -64,6 +110,27 @@ async def _post_bounded(path: str, body: dict[str, Any], timeout: float) -> dict
             "error": f"timeout after {timeout:.0f}s (可调大 timeout 参数; "
                      "kb_query 超时会返回已完成部分而非报错)",
         }
+
+
+async def _tracked(tool: str, coro, project_id: str,
+                   timeout: float = 0.0, log_timeout: float | None = None) -> dict:
+    """包住一次工具调用: 计时 + 状态判定 + JSONL 落账 (监控页数据源)。"""
+    import time as _time
+
+    t0 = _time.monotonic()
+    try:
+        data = await coro
+    except Exception as e:
+        _log_call(tool, project_id, t0, "error",
+                  timeout=log_timeout if log_timeout is not None else timeout,
+                  brief={"error": str(e)[:200]})
+        raise
+    err = str(data.get("error", "")) if isinstance(data, dict) else ""
+    status = "timeout" if err.startswith("timeout") else "ok"
+    _log_call(tool, project_id, t0, status,
+              timeout=log_timeout if log_timeout is not None else timeout,
+              brief=_brief_of(data))
+    return data
 
 
 async def _upload_verification(
@@ -108,11 +175,15 @@ async def kb_query(
     timeout: 等待上限秒数 (默认 300 = 5 分钟)。到点后端返回**已完成部分**
     (timed_out=true, 结论可能缺席但原文证据照常), 不会报错。
     """
-    return await _post_bounded(
-        "/fusion/query",
-        {"query": query, "project_id": project_id,
-         "history": history or [], "env": env, "budget": timeout},
-        timeout + 20.0,  # 后端到点返回; 余量防传输抖动
+    return await _tracked(
+        "kb_query",
+        _post_bounded(
+            "/fusion/query",
+            {"query": query, "project_id": project_id,
+             "history": history or [], "env": env, "budget": timeout},
+            timeout + 20.0,  # 后端到点返回; 余量防传输抖动
+        ),
+        project_id, log_timeout=timeout,
     )
 
 
@@ -131,10 +202,14 @@ async def kb_enum(
     返回 JSON: results (并集清单, 含简介/实体类型) / differences (两库
     差异 = 知识缺口信号) / notes。timeout: 等待上限秒数 (默认 300)。
     """
-    return await _post_bounded(
-        "/fusion/enum",
-        {"hint": hint, "project_id": project_id, "include_related": related},
-        timeout,
+    return await _tracked(
+        "kb_enum",
+        _post_bounded(
+            "/fusion/enum",
+            {"hint": hint, "project_id": project_id, "include_related": related},
+            timeout,
+        ),
+        project_id, timeout,
     )
 
 
@@ -152,10 +227,14 @@ async def kb_experience(
     拦截负知识 0.2); blocked 记录仅在 env 匹配时返回 (env 传当前验证环境)。
     timeout: 等待上限秒数 (默认 300)。
     """
-    return await _post_bounded(
-        "/fusion/experience",
-        {"query": query, "project_id": project_id, "env": env},
-        timeout,
+    return await _tracked(
+        "kb_experience",
+        _post_bounded(
+            "/fusion/experience",
+            {"query": query, "project_id": project_id, "env": env},
+            timeout,
+        ),
+        project_id, timeout,
     )
 
 
@@ -180,7 +259,11 @@ async def kb_record_verification(
         "verified_success", "verified_blocked", "unverified", "false_positive",
     ):
         return {"ok": False, "error": "verify_state 非法, 须为四态之一"}
-    return await _upload_verification(project_id, title, verify_state, env, content)
+    return await _tracked(
+        "kb_record_verification",
+        _upload_verification(project_id, title, verify_state, env, content),
+        project_id,
+    )
 
 
 @mcp.tool()
@@ -190,8 +273,10 @@ async def kb_query_history(project_id: str, limit: int = 5) -> dict:
     返回 JSON: items[] 每条 = 一次查询的完整融合响应 (query/ts/routing/
     results/notes/timings), 供程序化分析弱模型输出质量与检索问题。
     """
-    return await _post(
-        "/fusion/query-history", {"project_id": project_id, "limit": limit}
+    return await _tracked(
+        "kb_query_history",
+        _post("/fusion/query-history", {"project_id": project_id, "limit": limit}),
+        project_id,
     )
 
 

@@ -8,6 +8,7 @@
         <el-menu-item index="/ledger">知识台账</el-menu-item>
         <el-menu-item index="/aliases">对齐管理</el-menu-item>
         <el-menu-item index="/graph">实体图</el-menu-item>
+        <el-menu-item index="/mcp-monitor">MCP 监控</el-menu-item>
         <el-menu-item index="/projects">项目中心</el-menu-item>
       </el-menu>
     </el-header>
