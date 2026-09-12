@@ -350,7 +350,10 @@ async def fusion_experience(req: ExperienceRequest) -> dict:
         rag_workdir=proj.rag_workdir,
     )
     try:
-        resp = await orch.run(req.query, env=req.env, history=req.history or None, cleanup=req.cleanup)
+        # 不带 cleanup: ExperienceRequest 无该字段 (Q3 是 M3 纯排序无 LLM,
+        # 二次提取开关本就无意义) —— 曾经误传 req.cleanup 导致 500 (MCP
+        # kb_experience 同步受影响, 端到端走查抓到)
+        resp = await orch.run(req.query, env=req.env, history=req.history or None)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"fusion error: {e}") from e
     data = resp.to_dict()
