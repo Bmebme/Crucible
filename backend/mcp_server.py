@@ -1,7 +1,9 @@
 """Crucible MCP Server (P6): 给漏洞验证 Agent 的融合知识工具集。
 
-工具描述带检索阶梯提示 (WeKnora 模式, engineering-plan §6):
-场景/目标枚举先行 → 机制查询 → 经验验证 → 结果回写。
+主入口 kb_query (通用融合查询, 与平台查询台同一链路, 自动判别 Q1/Q2/Q3),
+定向快捷 kb_enum / kb_experience, 回写 kb_record_verification (经验闭环),
+复盘 kb_query_history。**所有工具返回结构化 JSON** (与融合服务接口同构,
+供 Agent 程序化消费; 需要人类可读清单时在 Agent 侧自行渲染)。
 
 运行: CRUCIBLE_API_BASE=http://127.0.0.1:8080 python mcp_server.py
 """
@@ -18,10 +20,12 @@ API = os.environ.get("CRUCIBLE_API_BASE", "http://127.0.0.1:8080")
 mcp = FastMCP(
     "crucible-kb",
     instructions=(
-        "漏洞验证知识库工具集。使用阶梯: ① 场景/目标枚举 (kb_enum) 明确攻击面 → "
-        "② 机制查询 (kb_mechanism) 搞清实现细节 → ③ 经验查询 (kb_experience) 查历史"
-        "验证记录 → ④ 验证完成后 kb_record_verification 回写 (形成经验闭环)。"
-        "所有结果带原文引用 (citations), 规划攻击路径前先看引用原文。"
+        "漏洞验证知识库工具集 (全部返回结构化 JSON)。主入口 kb_query: 通用融合查询, "
+        "自动判别 Q1 枚举/Q2 机制/Q3 经验, 与平台查询台同一链路 (结论 + 双引擎原文证据 + 引用)。"
+        "定向快捷: 攻击面构建用 kb_enum, 历史验证记录用 kb_experience。"
+        "验证完成后 kb_record_verification 回写 (经验闭环); 复盘用 kb_query_history。"
+        "所有检索结果带原文引用 (citations), 规划攻击路径前先看引用原文; "
+        "两库冲突不裁决, 由你判断。"
     ),
 )
 
@@ -52,110 +56,59 @@ async def _upload_verification(
         return resp.json()
 
 
-def _format_enum(data: dict, category: str = "", full: bool = False) -> str:
-    import sys as _sys
-
-    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from app.services.formatting import format_enum_compact
-
-    return format_enum_compact(data, category=category, full=full)
-
-
-def _format_experience(data: dict) -> str:
-    lines = [f"【验证记录】{len(data.get('results', []))} 条 (按 verify_state 加权降序)"]
-    for r in data.get("results", [])[:15]:
-        lines.append(
-            f"- [{r.get('weight')}] {r.get('state')}: {r.get('title') or r.get('path')}"
-            + (f" — {r.get('note')}" if r.get("note") else "")
-        )
-    if len(data.get("results", [])) > 15:
-        lines.append(f"…余 {len(data['results']) - 15} 条")
-    return "\n".join(lines)
-
-
 @mcp.tool()
-async def kb_query_history(project_id: str = "mae", limit: int = 5) -> str:
-    """读取项目最近的历史查询记录 (问题 + 整合结论 + 分段耗时 + notes)。
-
-    用途: 复盘分析 —— 内网 Agent 调此工具拿历史查询结果, 分析弱模型
-    输出质量/检索问题 (内网实调需求: 结果无法直接拷出, 需程序化获取)。
-    """
-    data = await _post(
-        "/fusion/query-history", {"project_id": project_id, "limit": limit}
-    )
-    lines: list[str] = []
-    for it in data.get("items", []):
-        ts = it.get("ts", "")
-        q = str(it.get("query", ""))[:80]
-        summary = ""
-        for r in it.get("results", []):
-            if r.get("kind") == "summary":
-                summary = (r.get("text") or "").replace("\n", " ")[:300]
-        timings = ", ".join(
-            f"{k}={v:.1f}s" for k, v in (it.get("timings") or {}).items()
-        )
-        lines.append(
-            f"[{ts}] Q: {q}\n  结论: {summary or '(无整合结论)'}\n  耗时: {timings or '(无)'}"
-        )
-    return "\n".join(lines) if lines else "(无历史记录)"
-
-
-@mcp.tool()
-async def kb_enum(
-    hint: str,
+async def kb_query(
+    query: str,
     project_id: str = "mae",
-    category: str = "",
-    full: bool = False,
-    related: bool = False,
-) -> str:
-    """枚举项目内与某主题相关的组件/接口/服务/概念 (Q1, 指标: 召回率)。
-
-    用途: 攻击场景构建阶段 —— 先摸清攻击面。步骤①, 在 kb_mechanism 之前调用。
-    hint 用具体名词, 如「组件」「外部接口」「文件处理」「鉴权」。
-
-    返回紧凑文本清单 (统计 + 分组 + 截断), 不会一次性倾倒全部条目;
-    需要某类完整条目时用 category (concepts/entities/queries/sources/
-    verification/rag) + full=true 逐类拉取。
-    """
-    data = await _post("/fusion/enum", {"hint": hint, "project_id": project_id, "include_related": related})
-    out = _format_enum(data, category=category, full=full)
-    if related and data.get("related_hits"):
-        lines = [f"【关联产品参考 (权重 0.1)】"]
-        for rh in data["related_hits"]:
-            names = "; ".join(str(r.get("name", "")) for r in rh.get("results", [])[:8])
-            lines.append(f"- {rh['project']}: {names}")
-        out += "\n" + "\n".join(lines)
-    return out
-
-
-@mcp.tool()
-async def kb_mechanism(
-    query: str, project_id: str = "mae", history: list[str] | None = None
+    history: list[str] | None = None,
+    env: str = "",
 ) -> dict:
-    """查询产品内部机制的精确事实 (Q2 机制型, 指标: 精确率)。
+    """通用融合查询 —— 最高优先级入口, 与平台查询台同一链路 (自动判别类型)。
 
-    用途: 攻击路径规划阶段 —— 数据流/调用链/鉴权实现等「怎么做的」问题。
-    步骤②, 在 kb_enum 之后; 追问时可传 history (指代消解)。
-    结果带文段级引用 (citations), 做决策前必读引用原文; 冲突时不裁决, 由你判断。
+    自动判别 Q1 枚举 / Q2 机制 / Q3 经验并走对应合并 (M1/M2/M3)。返回完整
+    响应 JSON: routing (判别) / results (结论 + llm-wiki chat 结论 + 双引擎
+    原文证据块) / differences / conflicts / notes / timings / timed_out。
+
+    任何「了解某组件/机制/历史」的问题都可直接用; 追问可传 history
+    (指代消解)。结果带文段级引用 (citations), 决策前必读引用原文。
     """
     return await _post(
         "/fusion/query",
-        {"query": query, "project_id": project_id, "history": history or []},
+        {"query": query, "project_id": project_id,
+         "history": history or [], "env": env},
     )
 
 
 @mcp.tool()
-async def kb_experience(query: str, project_id: str = "mae", env: str = "staging") -> str:
-    """查询历史验证记录/拦截特征/误报记录 (Q3 经验型, 指标: 可信度)。
+async def kb_enum(hint: str, project_id: str = "mae", related: bool = False) -> dict:
+    """枚举项目内与某主题相关的组件/接口/服务/概念 (Q1 枚举定向快捷)。
+
+    用途: 攻击场景构建阶段 —— 先摸清攻击面。hint 用具体名词, 如
+    「组件」「外部接口」「文件处理」「鉴权」; related=true 附关联产品
+    低权重参考区。
+
+    返回 JSON: results (并集清单, 含简介/实体类型) / differences (两库
+    差异 = 知识缺口信号) / notes。
+    """
+    return await _post(
+        "/fusion/enum",
+        {"hint": hint, "project_id": project_id, "include_related": related},
+    )
+
+
+@mcp.tool()
+async def kb_experience(query: str, project_id: str = "mae", env: str = "staging") -> dict:
+    """查询历史验证记录/拦截特征/误报记录 (Q3 经验定向快捷)。
 
     用途: POC 生成与验证阶段 —— 「以前打过什么/被什么拦过/成功过吗」。
-    步骤③; 结果按 verify_state 加权排序 (成功>未验证>拦截负知识),
-    blocked 记录仅在环境匹配时返回。返回紧凑文本清单 (最多 15 条)。
+
+    返回 JSON: results 按 verify_state 加权降序 (成功 1.0 > 未验证 0.5 >
+    拦截负知识 0.2); blocked 记录仅在 env 匹配时返回 (env 传当前验证环境)。
     """
-    data = await _post(
-        "/fusion/experience", {"query": query, "project_id": project_id, "env": env},
+    return await _post(
+        "/fusion/experience",
+        {"query": query, "project_id": project_id, "env": env},
     )
-    return _format_experience(data)
 
 
 @mcp.tool()
@@ -166,17 +119,32 @@ async def kb_record_verification(
     project_id: str = "mae",
     env: str = "staging",
 ) -> dict:
-    """回写一次实际验证结果到知识库 (步骤④, 经验闭环)。
+    """回写一次实际验证结果到知识库 (经验闭环)。
 
     verify_state 四选一: verified_success (验证成功) / verified_blocked (被拦截,
     content 里写拦截特征) / unverified (未实测) / false_positive (误报)。
     回写后同一环境下的 kb_experience 查询即可检索到, 按状态加权排序。
+
+    返回 JSON: {ok, job_id, message} —— 异步入库, 轮询
+    GET /projects/{id}/documents 看阶段。
     """
     if verify_state not in (
         "verified_success", "verified_blocked", "unverified", "false_positive",
     ):
         return {"ok": False, "error": "verify_state 非法, 须为四态之一"}
     return await _upload_verification(project_id, title, verify_state, env, content)
+
+
+@mcp.tool()
+async def kb_query_history(project_id: str = "mae", limit: int = 5) -> dict:
+    """读取项目最近的历史查询完整结果 (复盘/调优用)。
+
+    返回 JSON: items[] 每条 = 一次查询的完整融合响应 (query/ts/routing/
+    results/notes/timings), 供程序化分析弱模型输出质量与检索问题。
+    """
+    return await _post(
+        "/fusion/query-history", {"project_id": project_id, "limit": limit}
+    )
 
 
 # Streamable HTTP 传输: 挂进 crucible 服务 (/mcp), 供多人远程调用
