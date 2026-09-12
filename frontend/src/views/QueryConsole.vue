@@ -13,6 +13,11 @@
           <el-select v-model="projectId" style="width: 140px">
             <el-option v-for="p in projects" :key="p.id" :label="p.id" :value="p.id" />
           </el-select>
+          <!-- 项目级动作放项目选择旁: 原在结果卡里紧挨"结果 N 项"被误读成历史条数 -->
+          <el-tooltip content="清空该项目的查询历史落盘记录 (备份可回滚)" placement="top">
+            <el-button size="small" text type="danger" class="clear-hist"
+              :disabled="!projectId" @click="clearHistory">清空历史</el-button>
+          </el-tooltip>
         </el-form-item>
         <el-form-item label="对齐模式">
           <el-select v-model="aliasMode" style="width: 110px">
@@ -100,10 +105,6 @@
         <el-tag v-if="restoredAt" size="small" type="warning">
           上次结果 · {{ new Date(restoredAt).toLocaleTimeString('zh-CN', { hour12: false }) }}
         </el-tag>
-        <el-button
-          size="small" text type="danger" class="clear-hist"
-          @click="clearHistory"
-        >清空查询历史</el-button>
       </template>
 
       <!-- 分段耗时 (内网实调需求: 直观看到钱花在哪) -->
@@ -433,41 +434,56 @@ const placeholder = ref('例如: MAE 有哪些外部接口？')
 
 // 清空查询历史 (旧代码时代结论质量差, 清掉避免恢复/复盘被旧数据干扰)
 async function clearHistory() {
+  if (!projectId.value) return
   try {
     await ElMessageBox.confirm(
-      '清空该项目的查询历史落盘记录 (备份可回滚)。旧结论不再出现在恢复/复盘里。继续？',
+      `清空项目「${projectId.value}」的查询历史落盘记录 (备份可回滚), 同时清除本地"上次结果"缓存。继续？`,
       '清空查询历史', { type: 'warning' },
     )
   } catch { return }
   try {
     const r = await clearQueryHistory(projectId.value)
+    // 本地缓存一并清: 否则刷新后旧结果仍从 localStorage 恢复 (内网实调:
+    // 清了历史界面还是老样子)
+    localStorage.removeItem(LAST_QUERY_PREFIX + projectId.value)
+    if (localStorage.getItem(LAST_PROJECT_KEY) === projectId.value) {
+      localStorage.removeItem(LAST_PROJECT_KEY)
+    }
+    if (restoredAt.value) {
+      // 屏幕上显示的若是历史恢复的结果, 一并清屏 (已无落盘背书)
+      queryStore.result = null
+      queryStore.notes = []
+      restoredAt.value = 0
+    }
     ElMessage.success(`已清空 ${r.cleared ?? 0} 条 (备份: ${r.backup ?? '无'})`)
   } catch (e: any) {
     ElMessage.error('清空失败: ' + (e?.response?.data?.detail ?? e?.message ?? e))
   }
 }
 
-// 上次问答持久化: 切走/刷新不丢结果 (内网实调 bug)
-const LAST_QUERY_KEY = 'crucible-last-query'
+// 上次问答持久化: 按项目分键 (切换项目各自恢复各自的上次结果)
+const LAST_QUERY_PREFIX = 'crucible-last-query-'  // + projectId
+const LAST_PROJECT_KEY = 'crucible-last-project'
+const LEGACY_LAST_QUERY_KEY = 'crucible-last-query'  // 旧版单键 (一次性迁移)
 
 function saveLastQuery() {
   try {
-    localStorage.setItem(LAST_QUERY_KEY, JSON.stringify({
-      query: query.value, mode: mode.value, projectId: projectId.value,
+    localStorage.setItem(LAST_QUERY_PREFIX + projectId.value, JSON.stringify({
+      query: query.value, mode: mode.value,
       env: env.value, aliasMode: aliasMode.value, historyText: historyText.value,
       result: result.value, notes: notes.value, ts: Date.now(),
     }))
+    localStorage.setItem(LAST_PROJECT_KEY, projectId.value)
   } catch { /* ignore */ }
 }
 
-function restoreLastQuery() {
+function restoreLastQuery(pid: string): boolean {
   try {
-    const raw = localStorage.getItem(LAST_QUERY_KEY)
+    const raw = localStorage.getItem(LAST_QUERY_PREFIX + pid)
     if (!raw) return false
     const s = JSON.parse(raw)
     query.value = s.query ?? ''
     mode.value = s.mode ?? 'query'
-    projectId.value = s.projectId ?? ''
     env.value = s.env ?? 'staging'
     aliasMode.value = s.aliasMode ?? 'l2+l3'
     historyText.value = s.historyText ?? ''
@@ -522,30 +538,63 @@ function startHistPoll() {
   }, 15000)
 }
 
+// 加载某项目的视图: 清当前显示 → 该项目 localStorage 上次结果 → 后端落盘对齐
+// (切换项目/首次挂载共用; 修"切换项目不刷新, 还显示上一个项目结果")
+async function loadProjectView(pid: string) {
+  if (!pid) return
+  queryStore.result = null
+  queryStore.notes = []
+  restoredAt.value = 0
+  openBlocks.value = ['wikichat']
+  if (histPoll) { clearInterval(histPoll); histPoll = null }
+  if (!restoreLastQuery(pid)) return
+  try {
+    // 后端落盘可能比 localStorage 新 (F5 打断的查询跑完落盘): 覆盖, 否则轮询兜底
+    const h = await fetchQueryHistory(pid, 1)
+    const item = h?.items?.[0]
+    const histTs = parseHistTs(item?.ts ?? '')
+    if (histTs && histTs > restoredAt.value && Date.now() - histTs < HIST_WINDOW_MS) {
+      applyHistItem(item)
+    } else {
+      startHistPoll()
+    }
+  } catch { /* 历史接口不可用不打扰 */ }
+}
+
+// 切换项目 → 刷新为该项目的视图 (此前不刷新, 一直显示旧项目结果)
+let viewReady = false
+watch(projectId, (pid) => {
+  if (!viewReady || !pid) return
+  loadProjectView(pid)
+})
+
 onMounted(async () => {
   try {
     projects.value = await listProjects()
-    if (!projects.value.some((p: any) => p.id === projectId.value)) {
-      projectId.value = projects.value[0]?.id ?? ''
-    }
   } catch (e: any) {
     ElMessage.warning('后端未连接: ' + (e?.message ?? e))
   }
-  // SPA 切换回来: store 里可能已有进行中/已完成的结果, 不动
-  if (!queryStore.result) restoreLastQuery()
-  if (restoredAt.value) {
-    // F5 刷新: 立即拉一次 (被打断的查询可能已落盘), 没有更新则轮询兜底
+  // 旧版单键存储迁移 (一次性): 迁到 per-project 键
+  const legacy = localStorage.getItem(LEGACY_LAST_QUERY_KEY)
+  if (legacy && !localStorage.getItem(LAST_PROJECT_KEY)) {
     try {
-      const h = await fetchQueryHistory(projectId.value, 1)
-      const item = h?.items?.[0]
-      const histTs = parseHistTs(item?.ts ?? '')
-      if (histTs && histTs > restoredAt.value && Date.now() - histTs < HIST_WINDOW_MS) {
-        applyHistItem(item)
-      } else {
-        startHistPoll()
+      const s = JSON.parse(legacy)
+      if (s.projectId) {
+        localStorage.setItem(LAST_QUERY_PREFIX + s.projectId, legacy)
+        localStorage.setItem(LAST_PROJECT_KEY, s.projectId)
       }
     } catch { /* ignore */ }
+    localStorage.removeItem(LEGACY_LAST_QUERY_KEY)
   }
+  // 优先恢复上次使用的项目; 不在列表则取第一个
+  const lastPid = localStorage.getItem(LAST_PROJECT_KEY) || ''
+  if (!projects.value.some((p: any) => p.id === projectId.value)) {
+    projectId.value = projects.value.some((p: any) => p.id === lastPid)
+      ? lastPid : (projects.value[0]?.id ?? '')
+  }
+  // SPA 切换回来: store 里可能已有进行中/已完成的结果, 不动
+  if (!queryStore.result) await loadProjectView(projectId.value)
+  viewReady = true
 })
 
 onUnmounted(() => {
@@ -610,7 +659,7 @@ async function run() {
 .timings { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .qtype { margin-left: 8px; }
 .count { float: right; color: #909399; font-size: 13px; }
-.clear-hist { float: right; margin-left: 8px; }
+.clear-hist { margin-left: 8px; }
 .result-item { padding: 10px 0; border-bottom: 1px dashed #e4e7ed; }
 .ri-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ri-name { font-weight: 600; margin-right: 4px; }
