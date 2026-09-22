@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 API = os.environ.get("CRUCIBLE_API_BASE", "http://127.0.0.1:8080")
 
@@ -36,6 +37,11 @@ mcp = FastMCP(
         "所有检索结果带原文引用 (citations), 规划攻击路径前先看引用原文; "
         "两库冲突不裁决, 由你判断。"
     ),
+    # Host 校验交给配置化白名单 (app/mcp_hosts.py, 支持内网多机访问)。
+    # 关掉 SDK 自带的: host 默认 127.0.0.1 时它会自动开启 DNS rebinding 保护,
+    # 而白名单只含 127.0.0.1/localhost/::1 -> 内网 IP 访问被判 421
+    # "Invalid Host header" (页面不受影响, 所以表现为"页面能开、MCP 连不上")
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
 

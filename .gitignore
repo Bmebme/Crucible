@@ -17,3 +17,6 @@ backend/.venv/
 
 # 镜像构建上下文 (模型缓存+torch wheel, 280MB, 不入 git)
 .hf-bake/
+
+# MCP Host 白名单的本地副本 (开发时自动生成; 容器里在 /data, 不入 git)
+mcp_allowed_hosts.txt

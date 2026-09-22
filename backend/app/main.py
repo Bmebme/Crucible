@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import create_tables, init_db
+from .mcp_hosts import HostAllowlistMiddleware
 from .routers import documents, fusion, health, ledger, projects
 
 logging.basicConfig(
@@ -61,6 +62,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# MCP Host 白名单 (只管 /mcp, 见 app/mcp_hosts.py):
+# 配置文件 $CRUCIBLE_MCP_HOSTS_FILE -> /data/mcp_allowed_hosts.txt (容器),
+# 首次启动自动生成带注释的默认版; SDK 自带的校验已在 mcp_server.py 里关掉
+app.add_middleware(HostAllowlistMiddleware)
 
 
 @app.middleware("http")
