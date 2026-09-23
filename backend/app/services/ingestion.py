@@ -23,8 +23,10 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..config import get_settings
 from ..db import session_scope
 from ..models import IngestionJob
+from . import titling
 from .engines import get_rag
 
 logger = logging.getLogger("crucible.ingestion")
@@ -63,6 +65,32 @@ def sanitize_filename(name: str, fallback: str = "unnamed.md") -> str:
     if not stem:
         return fallback
     return f"{stem[:MAX_STEM_CHARS]}{ext}"
+
+
+async def _short_title_for_verification(original: str, text: str) -> str:
+    """验证记录: 用 LLM 把正文压成短标题 (失败/关闭 → 空串, 回落原标题)。"""
+    if not titling.enabled():
+        return ""
+    s = get_settings()
+    return await titling.generate_title(
+        original, text, s.llm_base, s.llm_api_key, s.llm_model
+    )
+
+
+def set_frontmatter_title(text: str, title: str) -> str:
+    """在已有 YAML frontmatter 里补/替换 title (无 frontmatter 则原样返回)。"""
+    if not text.startswith("---\n"):
+        return text
+    end = text.find("\n---", 4)
+    if end == -1:
+        return text
+    head, rest = text[:end], text[end:]
+    quoted = '"' + title.replace('"', "'") + '"'
+    if re.search(r"^title:", head, re.MULTILINE):
+        head = re.sub(r"^title:.*$", f"title: {quoted}", head, count=1, flags=re.MULTILINE)
+    else:
+        head = head.rstrip() + f"\ntitle: {quoted}"
+    return head + rest
 
 
 def ensure_inside(base_dir: Path, target: Path) -> Path:
@@ -182,6 +210,14 @@ async def run_ingestion(
         #    原子写 (临时文件 + rename, 防 watcher 半写竞态)
         if subdir == "verification":
             target_dir = Path(project_path) / "wiki" / "verification"
+            # 短标题 (LLM): 只改文件名与 frontmatter title, 正文 H1 保留原标题;
+            # 生成失败/超时/关闭 -> 空串, 回落清洗后的原标题 (写盘绝不因此失败)
+            short = await _short_title_for_verification(Path(md_filename).stem, text)
+            if short:
+                md_filename = sanitize_filename(f"{short}.md")
+                text = set_frontmatter_title(text, short)
+                await _update_job(job_id, filename=md_filename)
+                logger.info("验证记录标题: %r -> %r", Path(filename).stem, short)
             source_rel = str(Path("wiki") / "verification" / md_filename)
         else:
             # 保留 wiki 相对子路径 (批量补摄入用): 防止不同子目录同名
