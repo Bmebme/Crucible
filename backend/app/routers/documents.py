@@ -13,6 +13,7 @@ from ..services.engines import get_wiki
 from ..services.ingestion import (
     list_jobs,
     run_ingestion,
+    sanitize_filename,
     start_ingestion,
     validate_upload,
 )
@@ -38,7 +39,9 @@ async def upload_document(
     subdir: str = Form(""),
     source_subpath: str = Form(""),
 ) -> dict:
-    filename = file.filename or "unnamed.md"
+    # 清洗为安全单段名: MCP 回写时 title 可能含 "/" 等路径成分
+    # (内网实调: "CVE-2024-1234/命令注入" -> 目标父目录不存在 -> ENOENT)
+    filename = sanitize_filename(file.filename or "unnamed.md")
     proj = await get_project(project_id)
     project_path = await get_project_path(project_id)
     content = await file.read()

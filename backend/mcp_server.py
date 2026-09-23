@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from typing import Any
 
 import httpx
@@ -139,6 +140,21 @@ async def _tracked(tool: str, coro, project_id: str,
     return data
 
 
+def _safe_md_name(title: str) -> str:
+    """标题 → 安全文件名。
+
+    Agent 给的 title 里可能带 "/" (如 "CVE-2024-1234/命令注入") 或 "..",
+    直接当文件名会拼出目录层级: 目标父目录不存在 -> ENOENT, 或穿越写盘。
+    后端 (sanitize_filename) 也会再清洗一遍, 这里保证任务记录里的名字也可读。
+    """
+    raw = (title or "").replace("\\", "/")
+    parts = [p for p in raw.split("/") if p and p not in (".", "..")]
+    base = "_".join(parts)
+    base = re.sub(r'[\\/:*?"<>|\x00-\x1f\x7f]', "_", base)
+    base = re.sub(r"\s+", " ", base).strip().strip(". ")
+    return f"{(base or 'verification')[:120]}.md"
+
+
 async def _upload_verification(
     project_id: str, title: str, verify_state: str, env: str, content: str
 ) -> dict:
@@ -146,13 +162,13 @@ async def _upload_verification(
         f"---\nverify_state: {verify_state}\n"
         + (f"verify_env: {env}\n" if env else "")
         + "---\n\n"
-        + f"# {title}\n\n{content}\n"
+        + f"# {title}\n\n{content}\n"      # 正文保留原标题, 只清洗文件名
     )
     async with httpx.AsyncClient(timeout=600.0, trust_env=False) as c:
         resp = await c.post(
             f"{API}/projects/{project_id}/documents",
             data={"subdir": "verification"},
-            files={"file": (f"{title}.md", md.encode("utf-8"))},
+            files={"file": (_safe_md_name(title), md.encode("utf-8"))},
         )
         resp.raise_for_status()
         return resp.json()

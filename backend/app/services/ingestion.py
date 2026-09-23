@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,53 @@ ALLOWED_EXT = {".md", ".txt"}
 # 二进制格式: docreader 转换 (MinerU/markitdown) → md 后走统一源
 BINARY_EXT = {".pdf", ".docx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg"}
 MAX_BYTES = 50 * 1024 * 1024  # 与 docreader 的 50MB 上限一致
+
+# 文件名清洗 (外部输入: 上传名 / MCP 的 title)
+# 内网实调: MCP 回写验证记录时 title 里带 "/" (如 "CVE-2024-1234/命令注入"),
+# 直接拼进路径后目标父目录不存在 -> os.replace 报 ENOENT
+#   "'.../wiki/verification/tmpXXXX.md' -> '.../wiki/verification/CVE-2024-1234/命令注入.md'"
+# 同一条口子还允许 "../.." 穿越写入项目任意位置, 一并堵掉。
+_UNSAFE_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')
+MAX_STEM_CHARS = 120  # 单段文件名主干上限 (保留中文; 避免超过 255 字节上限)
+
+
+def sanitize_filename(name: str, fallback: str = "unnamed.md") -> str:
+    """把外部来的文件名降级为安全的**单段**文件名 (保留中文/空格/括号)。
+
+    - 丢掉 "." / ".." 路径成分: 断掉路径穿越 ("../../x.md" → "x.md")
+    - 其余层级用 "_" 连接: 保留信息不丢前缀
+      ("CVE-2024-1234/命令注入.md" → "CVE-2024-1234_命令注入.md"),
+      否则不同 CVE 的同名页面会互相覆盖
+    - 替换其余路径/控制字符、折叠空白、去掉首尾点与空格、限长
+    """
+    raw = (name or "").replace("\\", "/")
+    parts = [p for p in raw.split("/") if p and p not in (".", "..")]
+    base = "_".join(parts)
+    base = _UNSAFE_FILENAME_CHARS.sub("_", base)
+    base = re.sub(r"\s+", " ", base).strip().strip(". ")
+    if not base:
+        return fallback
+    stem, ext = Path(base).stem, Path(base).suffix
+    if not stem:
+        return fallback
+    return f"{stem[:MAX_STEM_CHARS]}{ext}"
+
+
+def ensure_inside(base_dir: Path, target: Path) -> Path:
+    """兜底: target 必须落在 base_dir 内, 否则退化为 base_dir 下的安全名。
+
+    清洗后正常不会触发; 作为纵深防御, 避免任何情况下写到目录之外。
+    """
+    base = base_dir.resolve()
+    try:
+        resolved = target.resolve()
+    except OSError:                                # pragma: no cover
+        resolved = target
+    if resolved != base and base not in resolved.parents:
+        safe = base / sanitize_filename(target.name)
+        logger.warning("目标路径越界, 已降级: %s -> %s", target, safe)
+        return safe
+    return target
 
 
 def validate_upload(filename: str, content: bytes) -> str | None:
@@ -80,6 +128,8 @@ async def run_ingestion(
     source_subpath: str = "",
 ) -> None:
     """摄入管线 (由端点以 BackgroundTasks 异步执行; 全程阶段可见)。"""
+    # 外部输入 (上传名 / MCP title) 先降级为安全单段名: 防路径成分与穿越
+    filename = sanitize_filename(filename)
     ext = Path(filename).suffix.lower()
     is_binary = ext in BINARY_EXT
     async with session_scope() as s:
@@ -104,7 +154,7 @@ async def run_ingestion(
             try:
                 with os.fdopen(fd, "wb") as f:
                     f.write(content)
-                os.replace(tmp, raw_dir / filename)
+                os.replace(tmp, ensure_inside(raw_dir, raw_dir / filename))
                 originals_rel = f"raw/originals/{filename}"
             except Exception:
                 if os.path.exists(tmp):
@@ -147,7 +197,7 @@ async def run_ingestion(
                 target_dir = Path(project_path) / "raw" / "sources" / sub_rel
                 source_rel = str(Path("raw") / "sources" / sub_rel / md_filename)
         target_dir.mkdir(parents=True, exist_ok=True)
-        target = target_dir / md_filename
+        target = ensure_inside(target_dir, target_dir / md_filename)
         fd, tmp = tempfile.mkstemp(dir=str(target_dir), suffix=".md")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
